@@ -1,0 +1,48 @@
+{
+  "name": "xavia-sidec-offline",
+  "version": "1.0.0",
+  "description": "Cliente offline para gestión de sujetos en ensayos clínicos - Módulo inclusión masiva XAVIA SIDEC",
+  "main": "dist/main/index.js",
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "build": "tsc && vite build",
+    "build:main": "tsc",
+    "build:renderer": "vite build",
+    "build:watch": "tsc --watch",
+    "start": "npm run build && npm run start:run",
+    "start:run": "electron .",
+    "dev": "npm run build && npm run start:run",
+    "clean": "rimraf dist",
+    "clean:all": "rimraf dist node_modules",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-rebuild -f -w better-sqlite3",
+    "reinstall": "powershell -NoProfile -ExecutionPolicy Bypass -File \"./scripts/reinstall.ps1\""
+  },
+  "dependencies": {
+    "@types/xlsx": "^0.0.35",
+    "better-sqlite3": "^11.6.0",
+    "exceljs": "^4.4.0",
+    "uuid": "^10.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/uuid": "^10.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "31.0.0",
+    "electron-rebuild": "^3.2.9",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=20.0.0 <21.0.0"
+  }
+}
