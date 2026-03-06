@@ -119,7 +119,7 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
 ## Documentación de requisitos
 
-En **docs/REQUIREMENTS.md** se recogen el modelo conceptual (Estudio, Sujeto, Pesquisaje, Inclusión, Usuario, Auditoría, PlantillaCRD, HojaCRD), los requisitos funcionales (RF-1 a RF-22), los no funcionales (RnF) y su trazabilidad con el código y la base de datos.
+En **docs/REQUIREMENTS.md** se recogen el modelo conceptual (Estudio, Sujeto, Pesquisaje, Inclusión, Usuario, Auditoría, PlantillaCRD, HojaCRD), los requisitos funcionales, los no funcionales (RnF) y su trazabilidad con el código y la base de datos.
 
 ## Estructura del proyecto
 
