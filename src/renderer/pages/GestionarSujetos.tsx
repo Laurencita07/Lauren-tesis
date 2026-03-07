@@ -2,7 +2,7 @@
  * Gestionar Sujetos: búsqueda por identificador, listado incluidos, inclusión directa, Evaluación Inicial CRD, exportación. RF-3, RF-5, RF-6, RF-9, RF-10, 5, 7.
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useEstudio } from '../context/EstudioContext';
 import { FormularioCRD } from '../components/crd/FormularioCRD';
 import { ConfirmModal } from '../components/ConfirmModal';
@@ -50,14 +50,6 @@ function IconArrowDown() {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
       <path d="M7 10l5 5 5-5z" />
-    </svg>
-  );
-}
-
-function IconLupa() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
-      <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l4.5 4.5L20 19.5l-4.5-4.5zm-6 0C8.01 14 6 11.99 6 9.5S8.01 5 10.5 5 15 7.01 15 9.5 12.99 14 10.5 14z" />
     </svg>
   );
 }
@@ -371,8 +363,6 @@ export function GestionarSujetos() {
     });
   };
 
-  const abrirEvaluacionInicial = abrirGestionarCRD;
-
   const abrirEditarSujeto = (sujeto: SujetoRow) => {
     window.electronAPI?.subject?.obtenerPorId?.(sujeto.id).then((row: Record<string, unknown> | undefined) => {
       if (!row) return;
@@ -505,6 +495,14 @@ export function GestionarSujetos() {
                               className="gs-accion"
                               title="Visualizar hoja CRD"
                               onClick={() => abrirVisualizarHojaCRD(s)}
+                            >
+                              <IconDocument />
+                            </button>
+                            <button
+                              type="button"
+                              className="gs-accion"
+                              title="Hoja Pesquisaje"
+                              onClick={() => abrirPesquisaje(s)}
                             >
                               <IconDocument />
                             </button>
@@ -693,8 +691,6 @@ export function GestionarSujetos() {
                       onChange={e => setFormDirecta(f => ({ ...f, estadoInclusion: e.target.value }))}
                     >
                       <option value="Incluido">Incluido</option>
-                      <option value="Pendiente">Pendiente</option>
-                      <option value="No incluido">No incluido</option>
                     </select>
                     <span className="arrow"><IconArrowDown /></span>
                   </div>

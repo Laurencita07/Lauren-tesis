@@ -444,14 +444,14 @@ export function GestionarPesquisaje() {
       {modalIncluir && (
         <div className="modal-overlay" onClick={() => setModalIncluir(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
-            <h3>Inclusión masiva (registro para pesquisaje)</h3>
+            <h3>Registro de sujetos para pesquisaje</h3>
             <p className="modal-incluir-instruction">Agrega las iniciales del sujeto.</p>
             <div className="modal-incluir-field">
               <label className="gs-label" htmlFor="modal-iniciales">Iniciales:</label>
               <input
                 id="modal-iniciales"
                 type="text"
-                className="gs-input"
+                className="gs-input modal-incluir-iniciales"
                 value={iniciales}
                 onChange={e => setIniciales(e.target.value)}
                 placeholder="Ej. ABC"
