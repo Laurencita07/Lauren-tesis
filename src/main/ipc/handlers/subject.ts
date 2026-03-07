@@ -28,8 +28,8 @@ export function registerSubjectHandlers(): void {
     return SubjectService.validarIdentificadorUnico(db, estudioId, iniciales, numeroInclusion, excluirSujetoId);
   });
 
-  ipcMain.handle('subject:listarPendientesPesquisaje', (_, estudioId: string) => {
-    return SubjectService.listarPendientesPesquisaje(db, estudioId);
+  ipcMain.handle('subject:listarPendientesPesquisaje', (_, estudioId: string, opts?: { identificador?: string }) => {
+    return SubjectService.listarPendientesPesquisaje(db, estudioId, opts);
   });
 
   ipcMain.handle('subject:listarIncluidos', (_, estudioId: string, opts?: { identificador?: string; estadoInclusion?: string }) => {
@@ -44,6 +44,18 @@ export function registerSubjectHandlers(): void {
     return SubjectService.obtenerPorId(db, sujetoId);
   });
 
+  ipcMain.handle('subject:actualizar', (_, sujetoId: string, datos: {
+    iniciales?: string;
+    fechaInclusion?: string;
+    numeroInclusion?: string;
+    grupoSujeto?: string;
+    horaInclusion?: string;
+    inicialesCentro?: string;
+    estadoInclusion?: string;
+  }) => {
+    SubjectService.actualizarSujeto(db, sujetoId, datos);
+  });
+
   ipcMain.handle('subject:actualizarResultadoPesquisaje', (_, sujetoId: string, resultado: 'Incluido' | 'No Incluido', datosInclusion?: {
     numeroInclusion: string;
     grupoSujeto?: string;
@@ -51,10 +63,6 @@ export function registerSubjectHandlers(): void {
     horaInclusion?: string;
   }, usuarioId?: string) => {
     SubjectService.actualizarResultadoPesquisaje(db, sujetoId, resultado, datosInclusion, usuarioId);
-  });
-
-  ipcMain.handle('subject:contarParaSincronizacion', (_, estudioId: string) => {
-    return SubjectService.contarParaSincronizacion(db, estudioId);
   });
 
   ipcMain.handle('subject:anular', (_, sujetoId: string, motivo?: string) => {

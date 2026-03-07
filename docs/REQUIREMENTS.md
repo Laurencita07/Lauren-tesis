@@ -57,6 +57,16 @@ El módulo es una respuesta a las limitaciones del proceso actual de inclusión 
 | 9 | **VariableCRD** | Campo del formulario (puede tener validación o listas de valores). | Definición en `plantillas_crd.definicion_json` / tabla opcional |
 | 10 | **ValorCRD** | Dato introducido en una variable para un sujeto. | `valores_crd` o dentro de `hojas_crd.datos_json` |
 
+### 2.1 Identificación del sujeto en entorno offline (6.2, 6.3)
+
+- **`id` (UUID en BD):** Es el identificador interno del registro en la base de datos. **No forma parte del “nombre” del sujeto** ni se muestra al usuario. Se usa solo para claves primarias, relaciones y sincronización futura.
+
+- **Identificador lógico (el “nombre” del sujeto):** Está compuesto por **Estudio + Iniciales + Código de inclusión** (número de inclusión), con prefijo del centro:
+  - Formato: `CIM_FL_` + id/código del estudio + `_` + Iniciales + `_` + Código de inclusión.
+  - **Reglas de unicidad:** No puede repetirse la combinación (estudio, iniciales, número de inclusión) dentro del mismo estudio. Sí pueden repetirse códigos de inclusión si las iniciales son distintas, y viceversa. El sistema valida esta unicidad en offline (SubjectService, UNIQUE en BD).
+
+- **CIMFL0001, CIMFL0002…:** Es el **número de inclusión** auto-generado cuando el sujeto se registra por pesquisaje. Va **después de las iniciales** en el identificador lógico cuando el sujeto queda incluido. El prefijo CIMFL identifica ese código en el flujo de pesquisaje.
+
 ---
 
 ## 3. Requisitos funcionales y trazabilidad
@@ -115,7 +125,7 @@ El módulo es una respuesta a las limitaciones del proceso actual de inclusión 
 ## 5. Correspondencia con el código actual
 
 - **Proceso main:** ventana, IPC, SQLite (`src/main`).
-- **Renderer:** layout (Header, Sidebar, Content), rutas (Gestionar Pesquisaje, Gestionar Sujetos, Importar plantilla CRD, Sincronización), tema verde clínico.
+- **Renderer:** layout (Header, Sidebar, Content), rutas (Gestionar Pesquisaje, Gestionar Sujetos, Importar plantilla CRD), tema verde clínico.
 - **Persistencia:** `estudios`, `sujetos`, `plantillas_crd`, `hojas_crd`; esquema extendido con `usuarios`, `pesquisaje`, `inclusiones`, `auditoria` y campos adicionales en `sujetos`.
 - **Servicios previstos:** TemplateService (RF-21), SubjectService (RF-2 a RF-20, RF-22), CrdService (formularios dinámicos, pesquisaje).
 

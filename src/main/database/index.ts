@@ -38,19 +38,18 @@ function runMigrations(database: Database.Database): void {
       // Columna ya existe
     }
   }
-  // Normaliza identificadores lógicos existentes al formato CIM_FL_ESTUDIO_INICIALES_NUMERO.
-  // - Si empiezan por 'CIM-FL-' o 'CIMFL_', se elimina ese prefijo temporal.
-  // - Después se sustituyen '-' por '_' y se antepone 'CIM_FL_'.
+  // Actualiza identificador_logico de todos los sujetos al formato correcto:
+  // CIM_FL_ + código/nombre del estudio + _ + iniciales + _ + número de inclusión.
+  // Así los ya registrados quedan como se pide (sin UUID del estudio en el nombre).
   try {
     database.exec(
-      "UPDATE sujetos SET identificador_logico = 'CIM_FL_' || REPLACE(CASE " +
-        "WHEN identificador_logico LIKE 'CIM-FL-%' THEN substr(identificador_logico, length('CIM-FL-') + 1) " +
-        "WHEN identificador_logico LIKE 'CIMFL_%' THEN substr(identificador_logico, length('CIMFL_') + 1) " +
-        "ELSE identificador_logico END, '-', '_') " +
-      "WHERE identificador_logico NOT LIKE 'CIM_FL_%'"
+      `UPDATE sujetos SET identificador_logico = (
+        SELECT 'CIM_FL_' || COALESCE(trim(e.codigo), trim(e.nombre), e.id) || '_' || COALESCE(trim(sujetos.iniciales), '') || '_' || COALESCE(trim(sujetos.numero_inclusion), '')
+        FROM estudios e WHERE e.id = sujetos.estudio_id
+      )`
     );
   } catch {
-    // Si la columna no existe o ya están migrados, ignorar.
+    // Si la columna no existe o falla la migración, ignorar.
   }
 }
 

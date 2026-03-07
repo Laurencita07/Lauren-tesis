@@ -6,7 +6,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useEstudio } from '../context/EstudioContext';
 import { FormularioCRD } from '../components/crd/FormularioCRD';
 import { ConfirmModal } from '../components/ConfirmModal';
+import { ToastMessage } from '../components/ToastMessage';
 import type { DefinicionFormulario } from '../components/crd/FormularioCRD';
+import type { DatosGeneralesSujeto } from '../components/crd/FormularioCRD';
 
 interface SujetoRow {
   id: string;
@@ -76,6 +78,22 @@ function IconTrash() {
   );
 }
 
+function IconDocument() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
+      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+    </svg>
+  );
+}
+
+function IconForm() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
+      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z" />
+    </svg>
+  );
+}
+
 const OPCIONES_GRUPO = ['Seleccione', 'Grupo 1', 'Grupo 2', 'Control', 'Experimental'];
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MIN_SEG = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
@@ -113,7 +131,10 @@ export function GestionarSujetos() {
     hojaId: string;
     definicion: DefinicionFormulario | null;
     datos: Record<string, unknown>;
+    soloLectura?: boolean;
+    datosGenerales?: DatosGeneralesSujeto;
   } | null>(null);
+  const [sujetoEditandoId, setSujetoEditandoId] = useState<string | null>(null);
   const [hojaPesquisajeAbierta, setHojaPesquisajeAbierta] = useState<{
     sujetoId: string;
     sujetoIdentificador: string;
@@ -134,12 +155,6 @@ export function GestionarSujetos() {
       .catch(() => setLista([]))
       .finally(() => setLoading(false));
   };
-
-  useEffect(() => {
-    if (!mensaje) return;
-    const t = setTimeout(() => setMensaje(''), 4000);
-    return () => clearTimeout(t);
-  }, [mensaje]);
 
   useEffect(() => {
     if (estudioId) {
@@ -200,6 +215,29 @@ export function GestionarSujetos() {
     if (!(numeroInclusion || '').trim()) { setMensaje('Número de inclusión obligatorio.'); setMensajeTipo('error'); return; }
     if (!(grupoSujeto || '').trim() || grupoSujeto === 'Seleccione') { setMensaje('Seleccione un grupo de sujetos.'); setMensajeTipo('error'); return; }
     if (!estudioId) return;
+
+    if (sujetoEditandoId) {
+      window.electronAPI?.subject?.validarIdentificador?.(estudioId, iniciales, numeroInclusion, sujetoEditandoId)
+        .then((v: { valido: boolean; mensaje?: string }) => {
+          if (!v.valido) { setMensaje(v.mensaje || 'Identificador duplicado.'); setMensajeTipo('error'); return; }
+          window.electronAPI?.subject?.actualizar?.(sujetoEditandoId, {
+            iniciales: iniciales.trim(),
+            fechaInclusion: fechaInclusion || undefined,
+            numeroInclusion: numeroInclusion.trim(),
+            grupoSujeto: (grupoSujeto || '').trim() || undefined,
+            horaInclusion: `${formDirecta.horaH}:${formDirecta.horaM}:${formDirecta.horaS}`,
+            inicialesCentro: (formDirecta.inicialesCentro || '').trim() || undefined,
+            estadoInclusion: formDirecta.estadoInclusion === 'Incluido' ? 'incluido' : formDirecta.estadoInclusion === 'Pendiente' ? 'pendiente' : 'no_incluido',
+          });
+          setModalDirecta(false);
+          setSujetoEditandoId(null);
+          setMensaje('Sujeto actualizado correctamente.');
+          setMensajeTipo('ok');
+          cargarLista();
+        });
+      return;
+    }
+
     window.electronAPI?.subject?.validarIdentificador?.(estudioId, iniciales, numeroInclusion)
       .then((v: { valido: boolean; mensaje?: string }) => {
         if (!v.valido) { setMensaje(v.mensaje || 'Identificador duplicado.'); setMensajeTipo('error'); return; }
@@ -284,7 +322,7 @@ export function GestionarSujetos() {
     cargarLista();
   };
 
-  const abrirEvaluacionInicial = (sujeto: SujetoRow) => {
+  const abrirVisualizarHojaCRD = (sujeto: SujetoRow) => {
     const plantilla = plantillasEval[0];
     if (!plantilla) {
       setMensaje('Importe primero una plantilla de Evaluación Inicial (Importar plantilla CRD).');
@@ -300,8 +338,59 @@ export function GestionarSujetos() {
           hojaId: hoja.id,
           definicion: def,
           datos: hoja.datos || {},
+          soloLectura: true,
         });
       });
+    });
+  };
+
+  const abrirGestionarCRD = (sujeto: SujetoRow) => {
+    const plantilla = plantillasEval[0];
+    if (!plantilla) {
+      setMensaje('Importe primero una plantilla de Evaluación Inicial (Importar plantilla CRD).');
+      setMensajeTipo('error');
+      return;
+    }
+    window.electronAPI?.crd?.obtenerOCrearHoja?.(sujeto.id, plantilla.id).then((hoja: { id: string; datos: Record<string, unknown> }) => {
+      window.electronAPI?.crd?.cargarDefinicionFormulario?.(plantilla.id).then((def: DefinicionFormulario | null) => {
+        setHojaEvalAbierta({
+          sujetoId: sujeto.id,
+          sujetoIdentificador: sujeto.identificador_logico,
+          plantillaId: plantilla.id,
+          hojaId: hoja.id,
+          definicion: def,
+          datos: hoja.datos || {},
+          datosGenerales: {
+            estadoInclusion: etiquetaEstado(sujeto.estado_inclusion),
+            fechaInclusion: sujeto.fecha_inclusion || undefined,
+            numeroInclusion: sujeto.numero_inclusion || undefined,
+            grupoSujeto: sujeto.grupo_sujeto || undefined,
+          },
+        });
+      });
+    });
+  };
+
+  const abrirEvaluacionInicial = abrirGestionarCRD;
+
+  const abrirEditarSujeto = (sujeto: SujetoRow) => {
+    window.electronAPI?.subject?.obtenerPorId?.(sujeto.id).then((row: Record<string, unknown> | undefined) => {
+      if (!row) return;
+      const h = (row.hora_inclusion as string) || '';
+      const [horaH = '12', horaM = '00', horaS = '00'] = h.toString().split(':');
+      setFormDirecta({
+        iniciales: (row.iniciales as string) || '',
+        fechaInclusion: (row.fecha_inclusion as string) || new Date().toISOString().slice(0, 10),
+        numeroInclusion: (row.numero_inclusion as string) || '',
+        grupoSujeto: (row.grupo_sujeto as string) || '',
+        estadoInclusion: row.estado_inclusion === 'incluido' ? 'Incluido' : row.estado_inclusion === 'pendiente' ? 'Pendiente' : 'No incluido',
+        horaH: horaH.slice(0, 2).padStart(2, '0'),
+        horaM: horaM.slice(0, 2).padStart(2, '0'),
+        horaS: horaS.slice(0, 2).padStart(2, '0'),
+        inicialesCentro: (row.iniciales_centro as string) || 'CIM',
+      });
+      setSujetoEditandoId(sujeto.id);
+      setModalDirecta(true);
     });
   };
 
@@ -326,18 +415,28 @@ export function GestionarSujetos() {
 
   const totalPaginas = Math.max(1, Math.ceil(lista.length / PAGE_SIZE));
   const listaPagina = lista.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
-  const desde = (pagina - 1) * PAGE_SIZE + 1;
+  const desde = lista.length === 0 ? 0 : (pagina - 1) * PAGE_SIZE + 1;
   const hasta = Math.min(pagina * PAGE_SIZE, lista.length);
+
+  const [paginaInput, setPaginaInput] = useState(String(pagina));
+  useEffect(() => { setPaginaInput(String(pagina)); }, [pagina]);
+  const aplicarPaginaInput = () => {
+    const n = parseInt(paginaInput, 10);
+    if (!Number.isNaN(n)) setPagina(Math.max(1, Math.min(totalPaginas, n)));
+    else setPaginaInput(String(pagina));
+  };
 
   if (estudioLoading) return <p>Cargando estudio...</p>;
 
   return (
     <div className="gestionar-sujetos">
       {mensaje && (
-        <div className={`app-toast ${mensajeTipo === 'error' ? 'app-toast--error' : ''}`}>
-          <div className="app-toast__bar" />
-          <div className="app-toast__body">{mensaje}</div>
-        </div>
+        <ToastMessage
+          tipo={mensajeTipo === 'error' ? 'error' : 'ok'}
+          texto={mensaje}
+          onClose={() => { setMensaje(''); setMensajeTipo(null); }}
+          duracion={5}
+        />
       )}
       {sujetoToAnular && (
         <ConfirmModal
@@ -358,7 +457,7 @@ export function GestionarSujetos() {
             <input
               id="gs-identificador"
               type="text"
-              className="gs-input"
+              className="gs-input gs-input-identificador"
               value={identificador}
               onChange={e => setIdentificador(e.target.value)}
             />
@@ -384,15 +483,14 @@ export function GestionarSujetos() {
                 <tr>
                   <th>Identificador <span className="gs-th-icon"><IconOrdenar /></span></th>
                   <th>Estado de inclusión <span className="gs-th-icon"><IconOrdenar /></span></th>
-                  <th>Evaluación inicial</th>
                   <th className="gs-col-acciones">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={4}>Cargando...</td></tr>
+                  <tr><td colSpan={3}>Cargando...</td></tr>
                 ) : listaPagina.length === 0 ? (
-                  <tr><td colSpan={4}>No hay sujetos. Use Adicionar sujeto (inclusión directa o con pesquisaje).</td></tr>
+                  <tr><td colSpan={3}>No hay sujetos. Use Adicionar sujeto (inclusión directa o con pesquisaje).</td></tr>
                 ) : (
                   listaPagina.map(s => {
                     const puedeEditar = s.estado_inclusion === 'pendiente' || s.estado_inclusion === 'incluido';
@@ -400,30 +498,22 @@ export function GestionarSujetos() {
                       <tr key={s.id}>
                         <td>{s.identificador_logico}</td>
                         <td>{etiquetaEstado(s.estado_inclusion)}</td>
-                        <td>
-                          {s.estado_inclusion === 'incluido' ? (
+                        <td className="gs-col-acciones">
+                          <div className="gs-acciones-icons">
                             <button
                               type="button"
-                              className="btn-primary"
-                              onClick={() => abrirEvaluacionInicial(s)}
+                              className="gs-accion"
+                              title="Visualizar hoja CRD"
+                              onClick={() => abrirVisualizarHojaCRD(s)}
                             >
-                              CRD Evaluación inicial
+                              <IconDocument />
                             </button>
-                          ) : (
-                            <span className="gs-accion-disabled">—</span>
-                          )}
-                        </td>
-                        <td className="gs-col-acciones">
-                          <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                             <button
                               type="button"
                               className="gs-accion"
                               disabled={!puedeEditar}
-                              title="Modificar"
-                              onClick={() => {
-                                if (s.estado_inclusion === 'pendiente') abrirPesquisaje(s);
-                                else if (s.estado_inclusion === 'incluido') abrirEvaluacionInicial(s);
-                              }}
+                              title="Editar sujeto"
+                              onClick={() => abrirEditarSujeto(s)}
                             >
                               <IconLapiz />
                             </button>
@@ -431,13 +521,10 @@ export function GestionarSujetos() {
                               type="button"
                               className="gs-accion"
                               disabled={!puedeEditar}
-                              title="Leer"
-                              onClick={() => {
-                                if (s.estado_inclusion === 'pendiente') abrirPesquisaje(s);
-                                else if (s.estado_inclusion === 'incluido') abrirEvaluacionInicial(s);
-                              }}
+                              title="Gestionar CRD"
+                              onClick={() => abrirGestionarCRD(s)}
                             >
-                              <IconLupa />
+                              <IconForm />
                             </button>
                             <button
                               type="button"
@@ -458,11 +545,19 @@ export function GestionarSujetos() {
           </div>
           <div className="gs-paginacion">
             <div className="gs-paginacion-controles">
-              <button type="button" className="gs-pag-btn" onClick={() => setPagina(1)} aria-label="Primera">&laquo;</button>
-              <button type="button" className="gs-pag-btn" onClick={() => setPagina(p => Math.max(1, p - 1))} aria-label="Anterior">&lsaquo;</button>
-              <span className="gs-pag-num">{pagina}</span>
-              <button type="button" className="gs-pag-btn" onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))} aria-label="Siguiente">&rsaquo;</button>
-              <button type="button" className="gs-pag-btn" onClick={() => setPagina(totalPaginas)} aria-label="Última">&raquo;</button>
+              <button type="button" className="gs-pag-btn" disabled={pagina <= 1} onClick={() => setPagina(1)} aria-label="Primera">&laquo;</button>
+              <button type="button" className="gs-pag-btn" disabled={pagina <= 1} onClick={() => setPagina(p => Math.max(1, p - 1))} aria-label="Anterior">&lsaquo;</button>
+              <input
+                type="text"
+                className="gs-pag-input"
+                value={paginaInput}
+                onChange={e => setPaginaInput(e.target.value.replace(/\D/g, ''))}
+                onBlur={aplicarPaginaInput}
+                onKeyDown={e => { if (e.key === 'Enter') aplicarPaginaInput(); }}
+                aria-label="Número de página"
+              />
+              <button type="button" className="gs-pag-btn gs-pag-btn--next" disabled={pagina >= totalPaginas} onClick={() => setPagina(p => Math.min(totalPaginas, p + 1))} aria-label="Siguiente">&rsaquo;</button>
+              <button type="button" className="gs-pag-btn gs-pag-btn--last" disabled={pagina >= totalPaginas} onClick={() => setPagina(totalPaginas)} aria-label="Última">&raquo;</button>
             </div>
             <div className="gs-paginacion-info">{lista.length ? `${desde} - ${hasta}/${lista.length}` : '0/0'}</div>
           </div>
@@ -529,10 +624,10 @@ export function GestionarSujetos() {
       )}
 
       {modalDirecta && (
-        <div className="modal-overlay" onClick={() => setModalDirecta(false)}>
+        <div className="modal-overlay" onClick={() => { setModalDirecta(false); setSujetoEditandoId(null); }}>
           <div className="modal-content modal-content--crear-sujeto" onClick={e => e.stopPropagation()}>
             <div className="crear-sujeto" style={{ padding: 24 }}>
-              <h2 className="crear-sujeto__titulo">Crear sujeto</h2>
+              <h2 className="crear-sujeto__titulo">{sujetoEditandoId ? 'Editar sujeto' : 'Crear sujeto'}</h2>
               <div className="crear-sujeto__barra">Datos del sujeto</div>
               <div className="crear-sujeto__grid">
                 <div className="crear-sujeto__field">
@@ -632,8 +727,8 @@ export function GestionarSujetos() {
               </div>
               
               <div className="crear-sujeto__actions">
-                <button type="button" className="btn-primary" onClick={handleAdicionarDirecta}>Guardar</button>
-                <button type="button" className="btn-secondary" onClick={() => setModalDirecta(false)}>Cancelar</button>
+                <button type="button" className="btn-primary" onClick={handleAdicionarDirecta}>{sujetoEditandoId ? 'Guardar cambios' : 'Guardar'}</button>
+                <button type="button" className="btn-secondary" onClick={() => { setModalDirecta(false); setSujetoEditandoId(null); }}>Cancelar</button>
               </div>
             </div>
           </div>
@@ -668,6 +763,8 @@ export function GestionarSujetos() {
               datosIniciales={hojaEvalAbierta.datos}
               esPesquisaje={false}
               hojaId={hojaEvalAbierta.hojaId}
+              soloLectura={hojaEvalAbierta.soloLectura}
+              datosGenerales={hojaEvalAbierta.datosGenerales}
               onGuardar={guardarHojaEval}
               onCerrar={() => setHojaEvalAbierta(null)}
             />

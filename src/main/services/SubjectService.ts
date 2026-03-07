@@ -1,6 +1,15 @@
 /**
  * SubjectService: gestión de sujetos, validación de identificador lógico (Estudio + Iniciales + Código inclusión),
  * inclusión masiva para pesquisaje e inclusión directa. RF-2, RF-3, RF-4, RF-6, RF-13, 6.2, 6.3.
+ *
+ * --- Identificación del sujeto (6.2, 6.3) ---
+ * • id (UUID): solo para la BD. Es el ID temporal local; NO forma parte del "nombre" del sujeto ni se muestra.
+ * • identificador_logico: es el "nombre" visible. Formato: CIM_FL_ + Estudio + _ + Iniciales + _ + Código de inclusión.
+ *   Reglas de unicidad: no puede repetirse (estudio, iniciales, número inclusión). Sí pueden repetirse
+ *   iniciales con distinto número, o el mismo número con distintas iniciales.
+ * • CIMFL0001, CIMFL0002...: número de inclusión auto-generado cuando el sujeto se registra por pesquisaje.
+ *   Después de las iniciales va ese número cuando el sujeto queda incluido. El prefijo CIMFL identifica
+ *   el código de inclusión en este flujo.
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -16,13 +25,23 @@ const ESTADOS = {
 /** Prefijo que caracteriza el centro (CIM_FL) para todos los identificadores lógicos. */
 const IDENTIFICADOR_PREFIX = 'CIM_FL_';
 
-/** Construye el identificador lógico: CIM_FL + Estudio + Iniciales + Código de inclusión */
+/** Obtiene el código/nombre del estudio para el identificador lógico (no el UUID). */
+function getEstudioCodigo(db: Database.Database, estudioId: string): string {
+  const row = db.prepare('SELECT codigo, nombre, id FROM estudios WHERE id = ?').get(estudioId) as
+    | { codigo: string | null; nombre: string; id: string }
+    | undefined;
+  if (!row) return (estudioId || '').trim();
+  const codigo = (row.codigo || row.nombre || row.id || '').trim();
+  return codigo || estudioId;
+}
+
+/** Construye el identificador lógico: CIM_FL + Código estudio + Iniciales + Código de inclusión (número de inclusión). */
 export function buildIdentificadorLogico(
-  estudioId: string,
+  estudioCodigo: string,
   iniciales: string,
   numeroInclusion: string
 ): string {
-  const base = `${(estudioId || '').trim()}_${(iniciales || '').trim()}_${(numeroInclusion || '').trim()}`;
+  const base = `${(estudioCodigo || '').trim()}_${(iniciales || '').trim()}_${(numeroInclusion || '').trim()}`;
   return IDENTIFICADOR_PREFIX + base;
 }
 
@@ -39,7 +58,8 @@ export function validarIdentificadorUnico(
   if (!ini) return { valido: false, mensaje: 'Iniciales son obligatorias.' };
   if (!num) return { valido: false, mensaje: 'Número de inclusión es obligatorio.' };
 
-  const identificador = buildIdentificadorLogico(estudioId, ini, num);
+  const estudioCodigo = getEstudioCodigo(db, estudioId);
+  const identificador = buildIdentificadorLogico(estudioCodigo, ini, num);
   const stmt = excluirSujetoId
     ? db.prepare(
         'SELECT 1 FROM sujetos WHERE estudio_id = ? AND identificador_logico = ? AND id != ? AND anulado = 0'
@@ -54,7 +74,7 @@ export function validarIdentificadorUnico(
   return { valido: true };
 }
 
-/** Prefijo para número de inclusión auto-generado en pesquisaje (ID correspondiente). */
+/** Prefijo del número de inclusión auto-generado en pesquisaje. Ej.: CIMFL0001, CIMFL0002… (va después de las iniciales en el identificador cuando el sujeto está incluido). */
 const PREFIJO_NUMERO_INCLUSION_PESQUISAJE = 'CIMFL';
 
 /** Obtiene el siguiente número de inclusión con prefijo CIMFL para el estudio. */
@@ -74,7 +94,7 @@ function siguienteNumeroInclusionPesquisaje(db: Database.Database, estudioId: st
   return PREFIJO_NUMERO_INCLUSION_PESQUISAJE + String(next).padStart(4, '0');
 }
 
-/** Crea sujeto para flujo con pesquisaje (solo Iniciales). Número de inclusión auto CSIMFLxxxx. Estado pendiente. 3.1 */
+/** Crea sujeto para flujo con pesquisaje (solo Iniciales). Número de inclusión auto CIMFL0001, CIMFL0002… Estado pendiente. 3.1 */
 export function crearParaPesquisaje(
   db: Database.Database,
   estudioId: string,
@@ -85,7 +105,8 @@ export function crearParaPesquisaje(
   if (!ini) throw new Error('Iniciales son obligatorias.');
   const id = uuidv4();
   const numeroInclusion = siguienteNumeroInclusionPesquisaje(db, estudioId);
-  const identificadorLogico = buildIdentificadorLogico(estudioId, ini, numeroInclusion);
+  const estudioCodigo = getEstudioCodigo(db, estudioId);
+  const identificadorLogico = buildIdentificadorLogico(estudioCodigo, ini, numeroInclusion);
   const now = new Date().toISOString();
 
   db.prepare(
@@ -116,7 +137,8 @@ export function crearInclusionDirecta(
   if (!v.valido) throw new Error(v.mensaje);
 
   const id = uuidv4();
-  const identificadorLogico = buildIdentificadorLogico(estudioId, datos.iniciales.trim(), datos.numeroInclusion.trim());
+  const estudioCodigo = getEstudioCodigo(db, estudioId);
+  const identificadorLogico = buildIdentificadorLogico(estudioCodigo, datos.iniciales.trim(), datos.numeroInclusion.trim());
   const now = new Date().toISOString();
 
   db.prepare(
@@ -144,16 +166,24 @@ export function crearInclusionDirecta(
 }
 
 /** Lista sujetos para Gestionar Pesquisaje: pendientes y no incluidos. 3.1, 3.2, requisito tutor */
-export function listarPendientesPesquisaje(db: Database.Database, estudioId: string): unknown[] {
-  const stmt = db.prepare(
-    `SELECT id, identificador_logico, iniciales, estado_inclusion, created_at
+export function listarPendientesPesquisaje(
+  db: Database.Database,
+  estudioId: string,
+  opts?: { identificador?: string }
+): unknown[] {
+  let sql = `SELECT id, identificador_logico, iniciales, estado_inclusion, created_at
      FROM sujetos
      WHERE estudio_id = ?
        AND estado_inclusion IN (?, ?)
-       AND anulado = 0
-     ORDER BY created_at DESC`
-  );
-  return stmt.all(estudioId, ESTADOS.PENDIENTE, ESTADOS.NO_INCLUIDO);
+       AND anulado = 0`;
+  const params: unknown[] = [estudioId, ESTADOS.PENDIENTE, ESTADOS.NO_INCLUIDO];
+  if (opts?.identificador && opts.identificador.trim()) {
+    sql += ' AND (identificador_logico LIKE ? OR iniciales LIKE ?)';
+    const q = '%' + opts.identificador.trim() + '%';
+    params.push(q, q);
+  }
+  sql += ' ORDER BY created_at DESC';
+  return db.prepare(sql).all(...params);
 }
 
 /** Lista sujetos para Gestionar Sujetos (solo incluidos). 3.3, 5 */
@@ -201,6 +231,68 @@ export function listarTodosParaGestionar(
 /** Obtiene un sujeto por ID */
 export function obtenerPorId(db: Database.Database, sujetoId: string): unknown {
   return db.prepare('SELECT * FROM sujetos WHERE id = ?').get(sujetoId);
+}
+
+/** Actualiza datos editables de un sujeto (RF-7). Si cambian iniciales o número de inclusión, revalida unicidad y actualiza identificador_logico. */
+export function actualizarSujeto(
+  db: Database.Database,
+  sujetoId: string,
+  datos: {
+    iniciales?: string;
+    fechaInclusion?: string;
+    numeroInclusion?: string;
+    grupoSujeto?: string;
+    horaInclusion?: string;
+    inicialesCentro?: string;
+    estadoInclusion?: string;
+  }
+): void {
+  const row = db.prepare('SELECT estudio_id, iniciales, numero_inclusion FROM sujetos WHERE id = ?').get(sujetoId) as
+    | { estudio_id: string; iniciales: string; numero_inclusion: string }
+    | undefined;
+  if (!row) throw new Error('Sujeto no encontrado.');
+
+  const now = new Date().toISOString();
+  const ini = (datos.iniciales ?? row.iniciales ?? '').trim();
+  const num = (datos.numeroInclusion ?? row.numero_inclusion ?? '').trim();
+
+  if (ini && num) {
+    const v = validarIdentificadorUnico(db, row.estudio_id, ini, num, sujetoId);
+    if (!v.valido) throw new Error(v.mensaje);
+    const estudioCodigo = getEstudioCodigo(db, row.estudio_id);
+    const identificadorLogico = buildIdentificadorLogico(estudioCodigo, ini, num);
+    db.prepare(
+      `UPDATE sujetos SET
+        identificador_logico = ?, iniciales = ?, fecha_inclusion = ?, numero_inclusion = ?,
+        grupo_sujeto = ?, hora_inclusion = ?, iniciales_centro = ?, estado_inclusion = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(
+      identificadorLogico,
+      ini,
+      datos.fechaInclusion ?? null,
+      num,
+      datos.grupoSujeto ?? null,
+      datos.horaInclusion ?? null,
+      datos.inicialesCentro ?? null,
+      datos.estadoInclusion ?? null,
+      now,
+      sujetoId
+    );
+  } else {
+    db.prepare(
+      `UPDATE sujetos SET
+        fecha_inclusion = ?, grupo_sujeto = ?, hora_inclusion = ?, iniciales_centro = ?, estado_inclusion = ?, updated_at = ?
+       WHERE id = ?`
+    ).run(
+      datos.fechaInclusion ?? null,
+      datos.grupoSujeto ?? null,
+      datos.horaInclusion ?? null,
+      datos.inicialesCentro ?? null,
+      datos.estadoInclusion ?? null,
+      now,
+      sujetoId
+    );
+  }
 }
 
 /** Anula (elimina lógicamente) un sujeto antes de sincronizar. Marca anulado = 1 y guarda motivo. RF-8 */
@@ -251,7 +343,8 @@ export function actualizarResultadoPesquisaje(
     if (!row) throw new Error('Sujeto no encontrado.');
     const numeroInclusionFinal = (datosInclusion?.numeroInclusion || row.numero_inclusion || '').trim();
     if (!numeroInclusionFinal) throw new Error('Número de inclusión no definido para el sujeto.');
-    const identificador = buildIdentificadorLogico(row.estudio_id, row.iniciales, numeroInclusionFinal);
+    const estudioCodigo = getEstudioCodigo(db, row.estudio_id);
+    const identificador = buildIdentificadorLogico(estudioCodigo, row.iniciales, numeroInclusionFinal);
     const v = validarIdentificadorUnico(db, row.estudio_id, row.iniciales, numeroInclusionFinal, sujetoId);
     if (!v.valido) throw new Error(v.mensaje);
     db.prepare(
@@ -270,20 +363,3 @@ export function actualizarResultadoPesquisaje(
   }
 }
 
-/** Cuenta pendientes de sync, total sujetos, pendientes pesquisaje (para Sincronización) */
-export function contarParaSincronizacion(db: Database.Database, estudioId: string): {
-  pendientesSync: number;
-  totalSujetos: number;
-  pendientesPesquisaje: number;
-} {
-  const pendientesSync = (db.prepare(
-    'SELECT COUNT(*) as c FROM sujetos WHERE estudio_id = ? AND sincronizado = 0 AND anulado = 0'
-  ).get(estudioId) as { c: number }).c;
-  const totalSujetos = (db.prepare(
-    'SELECT COUNT(*) as c FROM sujetos WHERE estudio_id = ? AND anulado = 0'
-  ).get(estudioId) as { c: number }).c;
-  const pendientesPesquisaje = (db.prepare(
-    'SELECT COUNT(*) as c FROM sujetos WHERE estudio_id = ? AND estado_inclusion = ? AND anulado = 0'
-  ).get(estudioId, ESTADOS.PENDIENTE) as { c: number }).c;
-  return { pendientesSync, totalSujetos, pendientesPesquisaje };
-}

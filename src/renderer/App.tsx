@@ -4,7 +4,6 @@ import { Layout } from './components/layout/Layout';
 import { GestionarPesquisaje } from './pages/GestionarPesquisaje';
 import { GestionarSujetos } from './pages/GestionarSujetos';
 import { ImportarPlantillaCRD } from './pages/ImportarPlantillaCRD';
-import { Sincronizacion } from './pages/Sincronizacion';
 import { IdentificarInvestigador } from './pages/IdentificarInvestigador';
 import { ROUTES, type RouteId } from '../shared/constants';
 
@@ -12,7 +11,6 @@ const PAGES: Record<RouteId, React.ReactNode> = {
   [ROUTES.PESQUISAJE]: <GestionarPesquisaje />,
   [ROUTES.SUJETOS]: <GestionarSujetos />,
   [ROUTES.IMPORTAR_CRD]: <ImportarPlantillaCRD />,
-  [ROUTES.SINCRONIZACION]: <Sincronizacion />,
 };
 
 export function App() {

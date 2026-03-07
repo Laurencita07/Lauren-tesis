@@ -85,8 +85,18 @@ export async function importarDesdeExcel(
   const sheetNames = workbook.SheetNames;
   if (!sheetNames || sheetNames.length === 0) throw new Error('El Excel no contiene pestañas.');
 
+  const norm = (s: string) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/\u0300/g, '');
+  const sheetCumple = (name: string) => {
+    const n = norm(name);
+    const tienePesquisaje = n.includes('pesquisaje');
+    const tieneEvalInicial = (n.includes('evaluacion') || n.includes('evaluación')) && n.includes('inicial');
+    return tipo === 'pesquisaje' ? tienePesquisaje : tieneEvalInicial;
+  };
+
   const sheetName =
-    sheetNames.find(n => n.toLowerCase().includes('variable')) || sheetNames[0];
+    sheetNames.find(n => sheetCumple(n)) ||
+    sheetNames.find(n => norm(n).includes('variable')) ||
+    sheetNames[0];
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) throw new Error('La pestaña de variables no existe en el Excel.');
 
@@ -107,6 +117,8 @@ export async function importarDesdeExcel(
   const idxSeccion = colIndex('seccion');
   const idxOrden = colIndex('orden');
   const idxResultado = colIndex('resultado');
+  const idxColumnas = colIndex('columna') >= 0 ? colIndex('columna') : colIndex('columnas');
+  const idxObligatorio = colIndex('obligatorio') >= 0 ? colIndex('obligatorio') : colIndex('required');
 
   const variables: VariableDef[] = [];
   const errores: string[] = [];
@@ -117,11 +129,18 @@ export async function importarDesdeExcel(
     const etiqueta = (vals[idxEtiqueta] ?? '').toString().trim();
     if (!etiqueta && !codigo) continue;
 
-    const tipoStr = (vals[idxTipo] ?? 'text').toString().trim();
-    const tipoVar = normalizarTipo(tipoStr);
+    let tipoStr = (vals[idxTipo] ?? 'text').toString().trim();
     const opcionesStr = idxOpciones >= 0 ? (vals[idxOpciones] ?? '').toString().trim() : '';
     const opciones = opcionesStr ? opcionesStr.split(/[,;|]/).map(s => s.trim()).filter(Boolean) : undefined;
+    if (!tipoStr && opciones && opciones.length > 0) tipoStr = 'ComboBox';
+    let tipoVar = normalizarTipo(tipoStr);
+    if (tipoVar === 'text' && opciones && opciones.length > 0) tipoVar = 'combobox';
     const esResultado = idxResultado >= 0 && (vals[idxResultado] ?? '').toString().toLowerCase().includes('si');
+
+    const colVal = idxColumnas >= 0 ? parseInt(String(vals[idxColumnas]), 10) : undefined;
+    const columnas = colVal === 1 || colVal === 2 ? colVal : undefined;
+    const obligRaw = idxObligatorio >= 0 ? (vals[idxObligatorio] ?? '').toString().toLowerCase().trim() : '';
+    const obligatorio = /^(si|sí|yes|true|1|x)$/.test(obligRaw);
 
     variables.push({
       id: codigo || `var_${i}`,
@@ -131,6 +150,8 @@ export async function importarDesdeExcel(
       opciones,
       seccion: idxSeccion >= 0 ? (vals[idxSeccion] ?? '').toString().trim() || undefined : undefined,
       orden: idxOrden >= 0 ? parseInt(String(vals[idxOrden]), 10) || i : i,
+      columnas,
+      obligatorio: idxObligatorio >= 0 ? obligatorio : undefined,
       esResultadoEvaluacion: tipo === 'pesquisaje' && (esResultado || etiqueta.toLowerCase().includes('resultado')),
     });
   }
@@ -194,15 +215,24 @@ export function importarDesdeJSON(
   const variables: VariableDef[] = rawVars.map((v, i) => {
     const id = (v.id ?? v.codigo ?? `var_${i}`).toString().trim();
     const etiqueta = (v.etiqueta ?? v.label ?? v.id ?? id).toString().trim();
-    const tipoStr = (v.tipo ?? v.type ?? 'text').toString().trim();
+    let tipoStr = (v.tipo ?? v.type ?? 'text').toString().trim();
+    const opciones = Array.isArray(v.opciones) ? v.opciones.map(String) : undefined;
+    if (!tipoStr && opciones && opciones.length > 0) tipoStr = 'combobox';
+    let tipoVar = normalizarTipo(tipoStr);
+    if (tipoVar === 'text' && opciones && opciones.length > 0) tipoVar = 'combobox';
+    const colNum = typeof v.columnas === 'number' ? v.columnas : (v.columnas != null ? parseInt(String(v.columnas), 10) : undefined);
+    const columnas = colNum === 1 || colNum === 2 ? colNum : undefined;
+    const obligatorio = v.obligatorio === true || (typeof v.obligatorio === 'string' && /^(si|sí|yes|true|1)$/i.test(String(v.obligatorio)));
     return {
       id: id || `var_${i}`,
       codigo: id || undefined,
       etiqueta: etiqueta || id,
-      tipo: normalizarTipo(tipoStr),
-      opciones: Array.isArray(v.opciones) ? v.opciones.map(String) : undefined,
+      tipo: tipoVar,
+      opciones,
       seccion: v.seccion ? String(v.seccion).trim() : undefined,
       orden: typeof v.orden === 'number' ? v.orden : i,
+      columnas,
+      obligatorio: v.obligatorio != null ? obligatorio : undefined,
       esResultadoEvaluacion: tipo === 'pesquisaje' && (
         (v.esResultadoEvaluacion === true) ||
         String(v.etiqueta ?? v.label ?? '').toLowerCase().includes('resultado')
@@ -236,6 +266,7 @@ export function importarDesdeJSON(
 
 /**
  * Importa plantilla desde un archivo (Excel o JSON). El tipo de archivo se detecta por la extensión.
+ * Solo se permite una plantilla de cada tipo (Pesquisaje / Evaluación inicial) por estudio.
  */
 export async function importarDesdeArchivo(
   db: Database.Database,
@@ -245,6 +276,13 @@ export async function importarDesdeArchivo(
   nombre: string
 ): Promise<{ id: string; nombre: string; errores?: string[] }> {
   if (!fs.existsSync(filePath)) throw new Error('El archivo no existe.');
+
+  const existentes = listarPlantillas(db, estudioId, tipo) as { id: string }[];
+  if (existentes.length > 0) {
+    const tipoEtiqueta = tipo === 'pesquisaje' ? 'Pesquisaje' : 'Evaluación inicial';
+    throw new Error(`Ya hay una plantilla de ${tipoEtiqueta} cargada. Solo se puede tener una plantilla de cada tipo. Elimine la actual si desea reemplazarla.`);
+  }
+
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.json') {
     return importarDesdeJSON(db, filePath, estudioId, tipo, nombre);

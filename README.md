@@ -1,63 +1,57 @@
-# XAVIA SIDEC - Cliente Offline
+# XAVIA SIDEC Offline – Módulo de inclusión masiva
 
-Aplicación de escritorio (Electron) para la gestión de sujetos en ensayos clínicos, módulo de inclusión masiva del sistema XAVIA SIDEC. Funciona **100% offline** con almacenamiento local SQLite.
+App de escritorio (Electron + React) para gestionar sujetos en ensayos clínicos. Es el módulo de inclusión masiva de XAVIA SIDEC y funciona todo en local con SQLite, sin internet.
 
-## Objetivo general
-
-- Gestionar Pesquisaje y Sujetos
-- Importar plantillas CRD desde Excel
-- Reconstruir formularios dinámicamente y aplicar reglas de negocio
-- Almacenar información localmente y preparar datos para futura sincronización con el sistema online
+Qué hace: pesquisaje, gestión de sujetos, importar plantillas CRD desde Excel, formularios dinámicos y guardar todo local para luego sincronizar cuando toque.
 
 ---
 
-## Requisitos
+## Qué necesitas
 
-- **Node.js 20 LTS** (`>=20.0.0 <21.0.0`). Se recomienda usar **Node 20** para evitar errores de instalación de Electron en Windows. Con Node 24 u otras versiones no soportadas puede aparecer *"Electron failed to install correctly"*.
-- npm (incluido con Node.js)
-- **Windows:** para compilar el módulo nativo `better-sqlite3` hace falta [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) con la carga "Desktop development with C++".
+- **Node 20** (LTS). Con Node 24 u otras versiones raras a veces Electron no instala bien y sale el error de "Electron failed to install correctly". Mejor quedarse en v20.
+- npm (viene con Node).
+- En **Windows**, para compilar `better-sqlite3`: [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) con "Desktop development with C++".
 
-**Recomendación (Windows):** Clona o mueve el proyecto a una ruta **sin emojis ni caracteres especiales**, por ejemplo `C:\proyectos\xavia-sidec`. Rutas como `C:\Users\Nombre💕\Desktop\...` pueden dar problemas con módulos nativos y con scripts. Usa algo como `C:\proyectos\app` o `C:\dev\xavia-sidec`.
+**Tip:** Si puedes, pon el proyecto en una ruta sin emojis ni caracteres raros (ej. `C:\proyectos\xavia-sidec`). En rutas tipo `Desktop\Nombre💕\...` a veces los módulos nativos dan guerra.
 
-Comprobar versión de Node:
+Para ver tu versión de Node:
 
 ```bash
 node -v
 ```
 
-Si no es v20.x, instala Node 20 LTS desde [nodejs.org](https://nodejs.org/) (versión LTS) o con [nvm-windows](https://github.com/coreybutler/nvm-windows).
+Si no es 20.x, instala Node 20 LTS desde [nodejs.org](https://nodejs.org/) o con nvm-windows.
 
 ---
 
-## Instalación
+## Cómo arrancar
 
-### Pasos recomendados (instalación limpia)
+Primera vez o si ves errores de módulos nativos (NODE_MODULE_VERSION, better_sqlite3, etc.):
 
-Si es la primera vez o si ves errores de módulos nativos (por ejemplo *"NODE_MODULE_VERSION 115/125"* o *"better_sqlite3.node was compiled against a different Node.js version"*):
-
-1. **Borrar** la carpeta `node_modules` (y opcionalmente `package-lock.json` y `dist`).
-2. **Instalar** dependencias (el script `postinstall` recompilará `better-sqlite3` para Electron):
+1. Borra `node_modules` (y si quieres `package-lock.json` y `dist`).
+2. Instala de nuevo:
 
    ```bash
    npm install
    ```
 
-3. Si el error persiste, **recompilar** manualmente los módulos nativos para la versión de Electron:
+   El postinstall recompila better-sqlite3 para Electron.
+
+3. Si sigue fallando, recompila a mano:
 
    ```bash
    npm run rebuild:native
    ```
 
-4. **Compilar y arrancar** la app:
+4. Arranca:
 
    ```bash
    npm run start
    ```
 
-Resumen en una sola secuencia (desde la raíz del proyecto):
+Todo en uno (desde la raíz):
 
 ```bash
-# Opcional: limpieza total
 rmdir /s /q node_modules
 del package-lock.json
 
@@ -66,49 +60,41 @@ npm run rebuild:native
 npm run start
 ```
 
-### Si aparece "Electron failed to install correctly"
-
-1. Asegúrate de usar **Node 20 LTS** (`node -v` → v20.x.x).
-2. Ejecuta la reinstalación limpia:
+Si te sale "Electron failed to install correctly", usa Node 20 y luego:
 
 ```bash
 npm run reinstall
 ```
 
-Eso borra `node_modules`, `package-lock.json` y `dist`, y vuelve a ejecutar `npm install` (y `postinstall` hará el rebuild de `better-sqlite3`).
+Ese script limpia todo y vuelve a instalar.
 
 ---
 
-## Scripts útiles
+## Scripts que uso
 
-| Script | Descripción |
-|--------|-------------|
-| `npm run build` | Compila TypeScript y el renderer (Vite). |
-| `npm run start` | Compila y abre la aplicación (Electron). |
-| `npm run start:run` | Abre la app sin compilar (usa `dist/` ya generado). |
-| `npm run rebuild:native` | Recompila `better-sqlite3` para la versión de Electron (soluciona NODE_MODULE_VERSION). |
-| `npm run clean` | Borra la carpeta `dist/`. |
+| Comando | Para qué |
+|--------|----------|
+| `npm run build` | Compila (TS + Vite). |
+| `npm run start` | Compila y abre la app. |
+| `npm run start:run` | Abre sin compilar (usa el `dist` que ya tengas). |
+| `npm run rebuild:native` | Recompila better-sqlite3 para Electron (cuando cambia la versión de Node/Electron). |
+| `npm run clean` | Borra `dist/`. |
 | `npm run clean:all` | Borra `dist/` y `node_modules/`. |
-| `npm run reinstall` | Limpieza completa y reinstalación (ver más abajo). |
+| `npm run reinstall` | Limpieza total y npm install. |
 
 ---
 
 ## Reinstalación limpia (Windows)
 
-Si Electron o otras dependencias fallan al instalar:
+Cuando Electron o las dependencias se rompen:
 
 ```powershell
 npm run reinstall
 ```
 
-El script `scripts/reinstall.ps1`:
+El script borra `node_modules`, `package-lock.json`, `dist` y hace `npm install` de nuevo.
 
-1. Elimina `node_modules`
-2. Elimina `package-lock.json`
-3. Elimina `dist/`
-4. Ejecuta `npm install`
-
-Para ejecutarlo directamente en PowerShell (si `npm run reinstall` da problemas de política de ejecución):
+Si PowerShell no te deja ejecutar scripts:
 
 ```powershell
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
@@ -117,71 +103,35 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 
 ---
 
-## Documentación de requisitos
+## Documentación y estructura
 
-En **docs/REQUIREMENTS.md** se recogen el modelo conceptual (Estudio, Sujeto, Pesquisaje, Inclusión, Usuario, Auditoría, PlantillaCRD, HojaCRD), los requisitos funcionales (RF-1 a RF-22), los no funcionales (RnF) y su trazabilidad con el código y la base de datos.
+En **docs/REQUIREMENTS.md** está el modelo (Estudio, Sujeto, Pesquisaje, PlantillaCRD, etc.), requisitos funcionales y no funcionales y cómo se mapean al código y a la BD.
 
-## Estructura del proyecto
+Estructura del repo:
 
 ```
 src/
-├── main/                 # Proceso principal (Electron)
-│   ├── index.ts          # Entrada, creación de ventana e IPC
-│   ├── window.ts         # Configuración de la ventana principal
-│   ├── database/         # SQLite
-│   │   ├── index.ts      # Conexión y ruta userData
-│   │   └── schema.ts     # Tablas: estudios, sujetos, plantillas_crd, hojas_crd
-│   └── ipc/              # Handlers IPC (app:getVersion, db:ping, etc.)
-├── preload/
-│   └── index.ts          # contextBridge: expone electronAPI al renderer
-├── renderer/             # Interfaz de usuario (React)
-│   ├── index.html
-│   ├── index.tsx         # Punto de entrada React
-│   ├── App.tsx            # Estado de ruta y layout
-│   ├── styles/
-│   │   └── theme.css     # Tema verde clínico (Header, Sidebar, Content)
+├── main/           # Electron: ventana, BD, IPC
+│   ├── index.ts
+│   ├── window.ts
+│   ├── database/   # SQLite (better-sqlite3)
+│   └── ipc/        # Handlers (subject, template, crd, estudio)
+├── preload/        # contextBridge → electronAPI
+├── renderer/       # React: App, Layout, Header, Sidebar, páginas
+│   ├── pages/      # Gestionar Pesquisaje, Sujetos, Importar CRD, Identificación
 │   ├── components/
-│   │   └── layout/       # Header, Sidebar, Layout
-│   └── pages/            # Módulos: Pesquisaje, Sujetos, Importar CRD, Sincronización
-├── shared/
-│   ├── constants.ts      # ROUTES, ROUTE_LABELS, APP_NAME
-│   └── types.ts          # UsuarioLocal, Estudio, Sujeto
+│   └── styles/
+├── shared/         # constants, types
 └── scripts/
-    └── reinstall.ps1     # Reinstalación limpia (Windows)
+    └── reinstall.ps1
 docs/
-└── REQUIREMENTS.md       # Modelo conceptual, RF, RnF y trazabilidad
+└── REQUIREMENTS.md
 ```
 
-## Descripción por capas
+Main: arranque, ventana, SQLite en userData, handlers IPC que llaman a los servicios. Renderer: layout con header XAVIA SIDEC, menú lateral, contenido en “carpeta”, pantallas por ruta. Preload expone solo lo que el renderer puede usar vía `window.electronAPI`.
 
-### Proceso principal (Main)
-
-- **index.ts**: Arranque de la app, registro de IPC y creación de la ventana; cierre de la base de datos al salir.
-- **window.ts**: Crea `BrowserWindow` con `preload` y carga `renderer/index.html`; `contextIsolation: true`, sin `nodeIntegration` en el renderer.
-- **database/**: Usa `better-sqlite3`; el archivo `.db` se guarda en `app.getPath('userData')`. El esquema define tablas para estudios, sujetos, plantillas CRD y hojas CRD.
-- **ipc/**: Handlers `app:getVersion` y `db:ping`; aquí se irán añadiendo los correspondientes a TemplateService, SubjectService y CrdService.
-
-### Renderer
-
-- **Layout**: Header (título "Ensayos Clínicos", Conducción, búsqueda, usuario, Salir) + Sidebar (Menú con enlaces a los cuatro módulos) + Content (banner verde con nombre del módulo + área de contenido).
-- **Navegación**: Estado `currentRoute` en `App`; al elegir un ítem del menú se actualiza la ruta y se muestra la página correspondiente (por ahora placeholders).
-- **Tema**: CSS con variables (`--header-bg`, `--accent-solid`, etc.) para el estilo verde tipo sistema clínico.
-
-### Preload
-
-- Expone `window.electronAPI` con `getVersion()` y `dbPing()` para que el renderer no acceda directamente a Node ni a `ipcRenderer` sin pasar por esta API.
-
-### Persistencia
-
-- SQLite en `userData`; esquema con estudios, sujetos, plantillas CRD y hojas CRD; preparado para UUID locales y futura sincronización.
-
-## Próximos pasos (fuera de esta fase)
-
-- Implementar **TemplateService** (ExcelJS/XLSX) e IPC para importar plantillas CRD.
-- Implementar **SubjectService** e IPC para CRUD de sujetos y validación de identificador lógico único.
-- Implementar **CrdService** para reconstrucción dinámica de formularios y reglas de negocio.
-- Completar pantallas de cada módulo (búsqueda, listado, formularios, exportación).
+---
 
 ## Licencia
 
-Uso interno / tesis. No distribuido bajo licencia pública.
+Uso interno / tesis. No es software público.

@@ -27,13 +27,22 @@ const api = {
       ipcRenderer.invoke('subject:crearInclusionDirecta', estudioId, datos, usuarioId),
     validarIdentificador: (estudioId: string, iniciales: string, numeroInclusion: string, excluirSujetoId?: string) =>
       ipcRenderer.invoke('subject:validarIdentificador', estudioId, iniciales, numeroInclusion, excluirSujetoId),
-    listarPendientesPesquisaje: (estudioId: string) =>
-      ipcRenderer.invoke('subject:listarPendientesPesquisaje', estudioId),
+    listarPendientesPesquisaje: (estudioId: string, opts?: { identificador?: string }) =>
+      ipcRenderer.invoke('subject:listarPendientesPesquisaje', estudioId, opts),
     listarIncluidos: (estudioId: string, opts?: { identificador?: string; estadoInclusion?: string }) =>
       ipcRenderer.invoke('subject:listarIncluidos', estudioId, opts),
     listarTodosParaGestionar: (estudioId: string, opts?: { identificador?: string }) =>
       ipcRenderer.invoke('subject:listarTodosParaGestionar', estudioId, opts),
     obtenerPorId: (sujetoId: string) => ipcRenderer.invoke('subject:obtenerPorId', sujetoId),
+    actualizar: (sujetoId: string, datos: {
+      iniciales?: string;
+      fechaInclusion?: string;
+      numeroInclusion?: string;
+      grupoSujeto?: string;
+      horaInclusion?: string;
+      inicialesCentro?: string;
+      estadoInclusion?: string;
+    }) => ipcRenderer.invoke('subject:actualizar', sujetoId, datos),
     actualizarResultadoPesquisaje: (sujetoId: string, resultado: 'Incluido' | 'No Incluido', datosInclusion?: {
       numeroInclusion: string;
       grupoSujeto?: string;
@@ -41,8 +50,6 @@ const api = {
       horaInclusion?: string;
     }) =>
       ipcRenderer.invoke('subject:actualizarResultadoPesquisaje', sujetoId, resultado, datosInclusion),
-    contarParaSincronizacion: (estudioId: string) =>
-      ipcRenderer.invoke('subject:contarParaSincronizacion', estudioId),
     anular: (sujetoId: string, motivo?: string) =>
       ipcRenderer.invoke('subject:anular', sujetoId, motivo),
   },

@@ -12,6 +12,8 @@ export interface VariableDef {
   tipo: string;
   opciones?: string[];
   seccion?: string;
+  orden?: number;
+  columnas?: number;
   obligatorio?: boolean;
   esResultadoEvaluacion?: boolean;
 }
@@ -23,6 +25,14 @@ export interface DefinicionFormulario {
   secciones?: { id: string; titulo: string; orden: number }[];
 }
 
+/** Datos generales del sujeto para mostrar en el cintillo (Gestionar CRD). */
+export interface DatosGeneralesSujeto {
+  estadoInclusion?: string;
+  fechaInclusion?: string;
+  numeroInclusion?: string;
+  grupoSujeto?: string;
+}
+
 interface FormularioCRDProps {
   definicion: DefinicionFormulario | null;
   sujetoIdentificador: string;
@@ -31,6 +41,10 @@ interface FormularioCRDProps {
   datosIniciales: Record<string, unknown>;
   esPesquisaje: boolean;
   hojaId?: string;
+  /** Solo lectura: muestra datos sin permitir editar (Visualizar hoja CRD). */
+  soloLectura?: boolean;
+  /** Datos generales para el cintillo (estado, fecha inclusión, etc.). */
+  datosGenerales?: DatosGeneralesSujeto;
   onGuardar: (datos: Record<string, unknown>) => void;
   onCerrar: () => void;
 }
@@ -43,12 +57,15 @@ export function FormularioCRD({
   datosIniciales,
   esPesquisaje,
   hojaId,
+  soloLectura = false,
+  datosGenerales,
   onGuardar,
   onCerrar,
 }: FormularioCRDProps) {
   const [datos, setDatos] = useState<Record<string, unknown>>(datosIniciales);
   const [guardando, setGuardando] = useState(false);
   const [seccionActiva, setSeccionActiva] = useState<string | null>(null);
+  const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
 
   useEffect(() => {
     setDatos(datosIniciales);
@@ -75,11 +92,34 @@ export function FormularioCRD({
   }, [secciones, seccionActiva]);
 
   const handleChange = (id: string, value: unknown) => {
+    setErrorValidacion(null);
     setDatos(prev => ({ ...prev, [id]: value }));
+  };
+
+  const valorVacio = (v: VariableDef, value: unknown): boolean => {
+    if (value === undefined || value === null) return true;
+    if (v.tipo === 'checkbox') return false;
+    const s = String(value).trim();
+    return s === '';
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorValidacion(null);
+
+    if (esPesquisaje && definicion) {
+      for (const v of definicion.variables) {
+        const key = v.id;
+        const value = datos[key] ?? datos[v.codigo ?? ''];
+        if (valorVacio(v, value)) {
+          setErrorValidacion(
+            'Complete todos los campos de la hoja CRD de pesquisaje antes de guardar el resultado (Incluido/No Incluido).'
+          );
+          return;
+        }
+      }
+    }
+
     setGuardando(true);
     onGuardar(datos);
     setGuardando(false);
@@ -94,9 +134,16 @@ export function FormularioCRD({
     );
   }
 
+  const fullWidth = (v: VariableDef) =>
+    v.columnas === 2 ||
+    (v.columnas !== 1 &&
+      (v.tipo === 'textarea' || v.tipo === 'checkbox' || v.tipo === 'radiobutton' || (esPesquisaje && !!v.esResultadoEvaluacion)));
+
   const renderVariable = (v: VariableDef) => {
     const key = v.id;
     const value = datos[key] ?? datos[v.codigo ?? ''] ?? '';
+    const full = fullWidth(v);
+    const fieldClass = `crd-field${full ? ' crd-field--full' : ''}`;
 
     const renderLabelAsterisco = () =>
       v.obligatorio ? <span style={{ color: 'var(--required-asterisk)', marginLeft: 2 }}>*</span> : null;
@@ -116,6 +163,7 @@ export function FormularioCRD({
               type="button"
               className={`crd-resultado__btn ${current === 'Incluido' ? 'crd-resultado__btn--active' : ''}`}
               onClick={() => setValor('Incluido')}
+              disabled={soloLectura}
             >
               Incluido
             </button>
@@ -123,6 +171,7 @@ export function FormularioCRD({
               type="button"
               className={`crd-resultado__btn ${current === 'No Incluido' ? 'crd-resultado__btn--active' : ''}`}
               onClick={() => setValor('No Incluido')}
+              disabled={soloLectura}
             >
               No Incluido
             </button>
@@ -133,11 +182,12 @@ export function FormularioCRD({
 
     if (v.tipo === 'checkbox') {
       return (
-        <label key={key} className="crd-field crd-field--checkbox crd-field--full">
+        <label key={key} className={`crd-field crd-field--checkbox ${fieldClass}`.trim()}>
           <input
             type="checkbox"
             checked={Boolean(value)}
             onChange={e => handleChange(key, e.target.checked)}
+            disabled={soloLectura}
           />
           <span>
             {v.etiqueta}
@@ -150,7 +200,7 @@ export function FormularioCRD({
       const opts = v.opciones && v.opciones.length ? v.opciones : (esPesquisaje && v.esResultadoEvaluacion ? ['Incluido', 'No Incluido'] : []);
       if (v.tipo === 'radiobutton') {
         return (
-          <div key={key} className="crd-field crd-field--radio crd-field--full">
+          <div key={key} className={`crd-field crd-field--radio ${fieldClass}`.trim()}>
             <span className="crd-label">
               {v.etiqueta}
               {renderLabelAsterisco()}
@@ -164,6 +214,7 @@ export function FormularioCRD({
                     value={opt}
                     checked={String(value) === opt}
                     onChange={() => handleChange(key, opt)}
+                    disabled={soloLectura}
                   />
                   {opt}
                 </label>
@@ -173,7 +224,7 @@ export function FormularioCRD({
         );
       }
       return (
-        <div key={key} className="crd-field">
+        <div key={key} className={fieldClass}>
           <label className="crd-label" htmlFor={key}>
             {v.etiqueta}
             {renderLabelAsterisco()}
@@ -182,6 +233,7 @@ export function FormularioCRD({
             id={key}
             value={String(value)}
             onChange={e => handleChange(key, e.target.value)}
+            disabled={soloLectura}
           >
             <option value="">Seleccione...</option>
             {opts.map(opt => (
@@ -193,7 +245,7 @@ export function FormularioCRD({
     }
     if (v.tipo === 'textarea') {
       return (
-        <div key={key} className="crd-field crd-field--full">
+        <div key={key} className={fieldClass}>
           <label className="crd-label" htmlFor={key}>
             {v.etiqueta}
             {renderLabelAsterisco()}
@@ -203,12 +255,14 @@ export function FormularioCRD({
             value={String(value)}
             onChange={e => handleChange(key, e.target.value)}
             rows={3}
+            readOnly={soloLectura}
+            disabled={soloLectura}
           />
         </div>
       );
     }
     return (
-      <div key={key} className="crd-field">
+      <div key={key} className={fieldClass}>
         <label className="crd-label" htmlFor={key}>
           {v.etiqueta}
           {renderLabelAsterisco()}
@@ -218,6 +272,8 @@ export function FormularioCRD({
           type={v.tipo === 'number' ? 'number' : v.tipo === 'date' ? 'date' : 'text'}
           value={String(value)}
           onChange={e => handleChange(key, v.tipo === 'number' ? e.target.valueAsNumber : e.target.value)}
+          readOnly={soloLectura}
+          disabled={soloLectura}
         />
       </div>
     );
@@ -231,9 +287,20 @@ export function FormularioCRD({
         })
       : definicion.variables;
 
+  const variablesOrdenadas = React.useMemo(() => {
+    const list = variablesFiltradas;
+    if (!esPesquisaje) return list;
+    return [...list].sort((a, b) => {
+      if (a.esResultadoEvaluacion && !b.esResultadoEvaluacion) return 1;
+      if (!a.esResultadoEvaluacion && b.esResultadoEvaluacion) return -1;
+      return (a.orden ?? 0) - (b.orden ?? 0);
+    });
+  }, [variablesFiltradas, esPesquisaje]);
+
+  const dg = datosGenerales;
   return (
     <div className="crd-form-wrap">
-      <div className="crd-view-header">Visualizar hoja CRD</div>
+      <div className="crd-view-header">{soloLectura ? 'Visualizar hoja CRD' : 'Gestionar CRD'}</div>
       <div className="crd-view-subheader">
         <span>Nombre de la hoja: {definicion.nombreHoja}</span>
       </div>
@@ -259,16 +326,31 @@ export function FormularioCRD({
             <span className="crd-cintillo__item">Identificador: {sujetoIdentificador}</span>
             <span className="crd-cintillo__item">Momento: {momentoSeguimiento}</span>
             <span className="crd-cintillo__item">Estudio: {nombreEstudio}</span>
+            {dg && (dg.estadoInclusion || dg.fechaInclusion || dg.numeroInclusion || dg.grupoSujeto) && (
+              <>
+                {dg.estadoInclusion && <span className="crd-cintillo__item">Estado: {dg.estadoInclusion}</span>}
+                {dg.fechaInclusion && <span className="crd-cintillo__item">Fecha inclusión: {dg.fechaInclusion}</span>}
+                {dg.numeroInclusion && <span className="crd-cintillo__item">Nº inclusión: {dg.numeroInclusion}</span>}
+                {dg.grupoSujeto && <span className="crd-cintillo__item">Grupo: {dg.grupoSujeto}</span>}
+              </>
+            )}
           </div>
           <form onSubmit={handleSubmit} className="crd-form">
             <div className="crd-section-grid">
-              {variablesFiltradas.map(v => renderVariable(v))}
+              {variablesOrdenadas.map(v => renderVariable(v))}
             </div>
+            {errorValidacion && (
+              <p className="crd-form-error" role="alert">
+                {errorValidacion}
+              </p>
+            )}
             <div className="crd-form-actions">
-              <button type="submit" className="btn-primary" disabled={guardando}>
-                Guardar
-              </button>
-              {!esPesquisaje && hojaId && (
+              {!soloLectura && (
+                <button type="submit" className="btn-primary" disabled={guardando}>
+                  Guardar
+                </button>
+              )}
+              {!soloLectura && !esPesquisaje && hojaId && (
                 <>
                   <button type="button" className="btn-secondary" onClick={() => window.electronAPI?.crd?.exportarJson?.(hojaId)}>
                     Exportar JSON
@@ -279,7 +361,7 @@ export function FormularioCRD({
                 </>
               )}
               <button type="button" className="btn-secondary" onClick={onCerrar}>
-                Cancelar
+                {soloLectura ? 'Cerrar' : 'Cancelar'}
               </button>
             </div>
           </form>
