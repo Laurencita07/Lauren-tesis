@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS plantillas_crd (
   codigo TEXT,
   tipo TEXT NOT NULL DEFAULT 'evaluacion_inicial',
   version TEXT,
+  activa INTEGER NOT NULL DEFAULT 1,
   definicion_json TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (estudio_id) REFERENCES estudios(id)
@@ -185,4 +186,9 @@ export const SUJETOS_ADD_INDEXES: string[] = [
 /** Migración: columna tipo en plantillas_crd */
 export const PLANTILLAS_ADD_TIPO: string[] = [
   'ALTER TABLE plantillas_crd ADD COLUMN tipo TEXT NOT NULL DEFAULT \'evaluacion_inicial\'',
+];
+
+/** Migración: columna activa en plantillas_crd (1 = visible en listado, 0 = oculta porque hay una versión nueva con sujetos vinculados) */
+export const PLANTILLAS_ADD_ACTIVA: string[] = [
+  'ALTER TABLE plantillas_crd ADD COLUMN activa INTEGER NOT NULL DEFAULT 1',
 ];

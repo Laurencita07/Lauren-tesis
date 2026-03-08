@@ -1022,63 +1022,107 @@ html, body {
   padding: 24px 0;
 }
 
-/* ----- Formulario CRD dinámico (cintillo + campos) ----- */
+/* ----- Modal CRD (Gestionar CRD / Visualizar hoja): que todo quepa en pantalla ----- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+.modal-content.modal-content--wide {
+  width: 100%;
+  max-width: min(800px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+}
+
+.modal-content.modal-content--wide .crd-form-wrap {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ----- Formulario CRD dinámico (cintillo + campos) - compacto para caber en modal ----- */
 .crd-form-wrap {
-  max-width: 900px;
+  max-width: min(900px, 100%);
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
+  overflow-x: hidden;
+  overflow-y: visible;
+  box-sizing: border-box;
+}
+
+.crd-form-wrap * {
+  box-sizing: border-box;
 }
 
 .crd-view-header {
   background: linear-gradient(to bottom, var(--legacy-green-light), var(--legacy-green-dark));
   color: var(--text-on-green);
-  padding: 6px 16px;
+  padding: 4px 12px;
   font-weight: 600;
   border-radius: 4px 4px 0 0;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .crd-view-subheader {
   background: #f5f7f6;
   border: 1px solid var(--border-light);
   border-top: none;
-  padding: 8px 16px;
-  font-size: 0.9rem;
+  padding: 4px 12px;
+  font-size: 0.8rem;
 }
 
 .crd-tabs-container {
   border: 1px solid var(--border-light);
   border-top: none;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .crd-tabs-bar {
   background: linear-gradient(to bottom, var(--legacy-green-light), var(--legacy-green-dark));
   color: var(--text-on-green);
-  padding: 4px 12px;
+  padding: 2px 8px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .crd-tabs-title {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
 .crd-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-wrap: wrap;
 }
 
 .crd-tab {
-  padding: 4px 10px;
+  padding: 2px 8px;
   border-radius: 4px 4px 0 0;
   border: none;
   cursor: pointer;
   background: transparent;
   color: var(--text-on-green);
-  font-size: 0.85rem;
+  font-size: 0.75rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .crd-tab--active {
@@ -1088,54 +1132,88 @@ html, body {
 
 .crd-section-body {
   background: #f5f7f6;
-  padding: 12px 16px 16px;
+  padding: 8px 12px 12px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .crd-cintillo {
   background: linear-gradient(to bottom, var(--legacy-green-light), var(--legacy-green-dark));
   color: var(--text-on-green);
-  padding: 12px 20px;
-  margin-bottom: 16px;
+  padding: 6px 10px;
+  margin-bottom: 8px;
   border-radius: 4px;
   display: flex;
   flex-wrap: wrap;
-  gap: 16px 24px;
+  gap: 6px 12px;
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .crd-cintillo__titulo {
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.85rem;
   width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .crd-cintillo__item {
-  font-size: 0.9rem;
+  font-size: 0.75rem;
   opacity: 0.95;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .crd-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
 }
 
 .crd-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .crd-label {
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--text-primary);
 }
 
 .crd-section-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px 16px;
+  min-width: 0;
+}
+
+.crd-section-grid .crd-field {
+  min-width: 0;
+}
+
+.crd-section-grid .crd-field input[type="text"],
+.crd-section-grid .crd-field input[type="number"],
+.crd-section-grid .crd-field input[type="date"],
+.crd-section-grid .crd-field select,
+.crd-section-grid .crd-field textarea {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .crd-section-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .crd-field--full {
@@ -1144,17 +1222,17 @@ html, body {
 
 .crd-resultado__buttons {
   display: inline-flex;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 6px;
+  margin-top: 2px;
 }
 
 .crd-resultado__btn {
-  padding: 6px 14px;
+  padding: 4px 10px;
   border-radius: 4px;
   border: 1px solid var(--border-light);
   background: #ffffff;
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
 }
 
 .crd-resultado__btn--active {
@@ -1168,45 +1246,88 @@ html, body {
 .crd-field input[type="date"],
 .crd-field select,
 .crd-field textarea {
-  padding: 8px 12px;
+  padding: 4px 8px;
   border: 1px solid var(--border-light);
   border-radius: 4px;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
+  min-height: 24px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.crd-field select {
+  min-height: 26px;
+  line-height: 1.2;
+}
+
+.crd-field textarea {
+  min-height: 48px;
+  resize: vertical;
 }
 
 .crd-field--checkbox {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.crd-field input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.crd-field--checkbox .crd-label {
+  margin: 0;
+  font-size: 0.8rem;
 }
 
 .crd-field--radio .crd-radio-group {
   display: flex;
-  gap: 16px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .crd-radio-group label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.crd-field input[type="radio"] {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  flex-shrink: 0;
   cursor: pointer;
 }
 
 .crd-form-error {
-  margin: 12px 0 0;
-  padding: 10px 12px;
+  margin: 8px 0 0;
+  padding: 6px 10px;
   background: #fff2f2;
   border: 1px solid #e0a0a0;
   border-radius: 4px;
   color: #c00;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
 }
 
 .crd-form-actions {
   display: flex;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.crd-form-actions .btn-primary,
+.crd-form-actions .btn-secondary {
+  padding: 5px 12px;
+  font-size: 0.85rem;
 }
 
 /* ----- Crear sujeto (modal idéntico a referencia) ----- */

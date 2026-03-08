@@ -137,7 +137,6 @@ export function GestionarSujetos() {
   } | null>(null);
   const [sujetoToAnular, setSujetoToAnular] = useState<SujetoRow | null>(null);
   const [plantillasEval, setPlantillasEval] = useState<{ id: string; nombre: string }[]>([]);
-  const [plantillasPesquisaje, setPlantillasPesquisaje] = useState<{ id: string; nombre: string }[]>([]);
 
   const cargarLista = () => {
     if (!estudioId) return;
@@ -154,9 +153,6 @@ export function GestionarSujetos() {
       window.electronAPI?.template?.listar?.(estudioId, 'evaluacion_inicial')
         .then((r: { id: string; nombre: string }[]) => setPlantillasEval(Array.isArray(r) ? r : []))
         .catch(() => setPlantillasEval([]));
-      window.electronAPI?.template?.listar?.(estudioId, 'pesquisaje')
-        .then((r: { id: string; nombre: string }[]) => setPlantillasPesquisaje(Array.isArray(r) ? r : []))
-        .catch(() => setPlantillasPesquisaje([]));
     }
   }, [estudioId]);
 
@@ -276,27 +272,6 @@ export function GestionarSujetos() {
     return estado;
   };
 
-  const abrirPesquisaje = (sujeto: SujetoRow) => {
-    const plantilla = plantillasPesquisaje[0];
-    if (!plantilla) {
-      setMensaje('Importe primero una plantilla de Pesquisaje (Importar plantilla CRD).');
-      setMensajeTipo('error');
-      return;
-    }
-    window.electronAPI?.crd?.obtenerOCrearHoja?.(sujeto.id, plantilla.id).then((hoja: { id: string; datos: Record<string, unknown> }) => {
-      window.electronAPI?.crd?.cargarDefinicionFormulario?.(plantilla.id).then((def: DefinicionFormulario | null) => {
-        setHojaPesquisajeAbierta({
-          sujetoId: sujeto.id,
-          sujetoIdentificador: sujeto.identificador_logico,
-          plantillaId: plantilla.id,
-          hojaId: hoja.id,
-          definicion: def,
-          datos: hoja.datos || {},
-        });
-      });
-    });
-  };
-
   const guardarHojaPesquisaje = (datos: Record<string, unknown>) => {
     if (!hojaPesquisajeAbierta) return;
     window.electronAPI?.crd?.guardarDatosHoja?.(hojaPesquisajeAbierta.hojaId, datos);
@@ -382,6 +357,14 @@ export function GestionarSujetos() {
       setSujetoEditandoId(sujeto.id);
       setModalDirecta(true);
     });
+  };
+
+  const eliminarSujetoDespuesDeExportar = (id: string) => {
+    window.electronAPI?.subject?.anular?.(id, 'Sujeto exportado; eliminado a petición del usuario');
+    setHojaEvalAbierta(null);
+    cargarLista();
+    setMensaje('Sujeto exportado y eliminado correctamente.');
+    setMensajeTipo('ok');
   };
 
   const guardarHojaEval = (datos: Record<string, unknown>) => {
@@ -495,14 +478,6 @@ export function GestionarSujetos() {
                               className="gs-accion"
                               title="Visualizar hoja CRD"
                               onClick={() => abrirVisualizarHojaCRD(s)}
-                            >
-                              <IconDocument />
-                            </button>
-                            <button
-                              type="button"
-                              className="gs-accion"
-                              title="Hoja Pesquisaje"
-                              onClick={() => abrirPesquisaje(s)}
                             >
                               <IconDocument />
                             </button>
@@ -763,6 +738,8 @@ export function GestionarSujetos() {
               datosGenerales={hojaEvalAbierta.datosGenerales}
               onGuardar={guardarHojaEval}
               onCerrar={() => setHojaEvalAbierta(null)}
+              sujetoId={hojaEvalAbierta.sujetoId}
+              onEliminarSujetoDespuesDeExportar={eliminarSujetoDespuesDeExportar}
             />
           </div>
         </div>

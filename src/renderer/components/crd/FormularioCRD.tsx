@@ -4,6 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { ConfirmModal } from '../ConfirmModal';
 
 export interface VariableDef {
   id: string;
@@ -47,6 +48,9 @@ interface FormularioCRDProps {
   datosGenerales?: DatosGeneralesSujeto;
   onGuardar: (datos: Record<string, unknown>) => void;
   onCerrar: () => void;
+  /** Si se pasa, tras exportar JSON/Excel se pregunta si desea eliminar el sujeto ya exportado. */
+  sujetoId?: string;
+  onEliminarSujetoDespuesDeExportar?: (sujetoId: string) => void;
 }
 
 export function FormularioCRD({
@@ -61,11 +65,23 @@ export function FormularioCRD({
   datosGenerales,
   onGuardar,
   onCerrar,
+  sujetoId,
+  onEliminarSujetoDespuesDeExportar,
 }: FormularioCRDProps) {
   const [datos, setDatos] = useState<Record<string, unknown>>(datosIniciales);
   const [guardando, setGuardando] = useState(false);
   const [seccionActiva, setSeccionActiva] = useState<string | null>(null);
   const [errorValidacion, setErrorValidacion] = useState<string | null>(null);
+  const [mostrarConfirmEliminar, setMostrarConfirmEliminar] = useState(false);
+
+  const handleExportar = async (tipo: 'json' | 'excel') => {
+    if (!hojaId) return;
+    const api = tipo === 'json' ? window.electronAPI?.crd?.exportarJson : window.electronAPI?.crd?.exportarExcel;
+    const r = await api?.(hojaId) as { canceled?: boolean; path?: string } | undefined;
+    if (r && !r.canceled && sujetoId && onEliminarSujetoDespuesDeExportar) {
+      setMostrarConfirmEliminar(true);
+    }
+  };
 
   useEffect(() => {
     setDatos(datosIniciales);
@@ -352,10 +368,10 @@ export function FormularioCRD({
               )}
               {!soloLectura && !esPesquisaje && hojaId && (
                 <>
-                  <button type="button" className="btn-secondary" onClick={() => window.electronAPI?.crd?.exportarJson?.(hojaId)}>
+                  <button type="button" className="btn-secondary" onClick={() => handleExportar('json')}>
                     Exportar JSON
                   </button>
-                  <button type="button" className="btn-secondary" onClick={() => window.electronAPI?.crd?.exportarExcel?.(hojaId)}>
+                  <button type="button" className="btn-secondary" onClick={() => handleExportar('excel')}>
                     Exportar Excel
                   </button>
                 </>
@@ -367,6 +383,19 @@ export function FormularioCRD({
           </form>
         </div>
       </div>
+      {mostrarConfirmEliminar && sujetoId && onEliminarSujetoDespuesDeExportar && (
+        <ConfirmModal
+          title="Sujeto exportado"
+          message="¿Desea eliminar el sujeto ya exportado?"
+          confirmLabel="Sí, eliminar"
+          cancelLabel="No"
+          onConfirm={() => {
+            onEliminarSujetoDespuesDeExportar(sujetoId);
+            setMostrarConfirmEliminar(false);
+          }}
+          onCancel={() => setMostrarConfirmEliminar(false)}
+        />
+      )}
     </div>
   );
 }

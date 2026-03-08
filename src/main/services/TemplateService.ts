@@ -266,7 +266,10 @@ export function importarDesdeJSON(
 
 /**
  * Importa plantilla desde un archivo (Excel o JSON). El tipo de archivo se detecta por la extensión.
- * Solo se permite una plantilla de cada tipo (Pesquisaje / Evaluación inicial) por estudio.
+ * Si ya existe una plantilla del mismo tipo (Pesquisaje o Evaluación inicial):
+ * - Misma definición → error "Esta plantilla ya está importada."
+ * - Distinta definición → se considera otra versión: la anterior se oculta (activa=0) si tiene sujetos
+ *   vinculados y no aparece en el listado; se inserta la nueva como activa.
  */
 export async function importarDesdeArchivo(
   db: Database.Database,
@@ -277,10 +280,25 @@ export async function importarDesdeArchivo(
 ): Promise<{ id: string; nombre: string; errores?: string[] }> {
   if (!fs.existsSync(filePath)) throw new Error('El archivo no existe.');
 
+  let definicionNueva: DefinicionPlantilla;
+  try {
+    definicionNueva = parsearDefinicionDesdeArchivo(filePath, tipo, nombre);
+  } catch (e) {
+    throw e instanceof Error ? e : new Error('No se pudo leer la definición del archivo.');
+  }
+
   const existentes = listarPlantillas(db, estudioId, tipo) as { id: string }[];
   if (existentes.length > 0) {
-    const tipoEtiqueta = tipo === 'pesquisaje' ? 'Pesquisaje' : 'Evaluación inicial';
-    throw new Error(`Ya hay una plantilla de ${tipoEtiqueta} cargada. Solo se puede tener una plantilla de cada tipo. Elimine la actual si desea reemplazarla.`);
+    const defExistente = obtenerDefinicion(db, existentes[0].id);
+    if (definicionEquals(defExistente, definicionNueva)) {
+      throw new Error('Esta plantilla ya está importada.');
+    }
+    // Nueva versión: ocultar la actual (no tiene que salir en el listado)
+    try {
+      db.prepare('UPDATE plantillas_crd SET activa = 0 WHERE id = ?').run(existentes[0].id);
+    } catch {
+      // Si la columna activa no existe aún (BD antigua), la migración la añadirá; seguir con el insert
+    }
   }
 
   const ext = path.extname(filePath).toLowerCase();
@@ -293,13 +311,25 @@ export async function importarDesdeArchivo(
   throw new Error('Formato no soportado. Use Excel (.xlsx, .xls) o JSON (.json).');
 }
 
-/** Lista plantillas por estudio y opcionalmente por tipo */
+/** Elimina de la BD las plantillas ocultas (activa=0) que ya no tienen ninguna hoja CRD asociada. */
+export function eliminarPlantillasOcultasSinUso(db: Database.Database): void {
+  try {
+    db.prepare(
+      `DELETE FROM plantillas_crd WHERE activa = 0 AND id NOT IN (SELECT plantilla_id FROM hojas_crd)`
+    ).run();
+  } catch {
+    // Si no existe columna activa, no hacer nada
+  }
+}
+
+/** Lista plantillas por estudio y opcionalmente por tipo. Solo las activas (visibles en el listado). */
 export function listarPlantillas(
   db: Database.Database,
   estudioId: string,
   tipo?: TipoPlantilla
 ): unknown[] {
-  let sql = 'SELECT id, nombre, codigo, tipo, created_at FROM plantillas_crd WHERE estudio_id = ?';
+  eliminarPlantillasOcultasSinUso(db);
+  let sql = 'SELECT id, nombre, codigo, tipo, created_at FROM plantillas_crd WHERE estudio_id = ? AND (activa = 1 OR activa IS NULL)';
   const params: unknown[] = [estudioId];
   if (tipo) {
     sql += ' AND tipo = ?';
@@ -325,9 +355,9 @@ export function eliminarPlantilla(
   if (row && row.c > 0) {
     throw new Error('No se puede eliminar la plantilla porque existen hojas CRD asociadas a sujetos no anulados.');
   }
-  // Limpieza opcional: eliminar hojas_crd huérfanas de esta plantilla
   db.prepare('DELETE FROM hojas_crd WHERE plantilla_id = ?').run(plantillaId);
   db.prepare('DELETE FROM plantillas_crd WHERE id = ?').run(plantillaId);
+  eliminarPlantillasOcultasSinUso(db);
 }
 
 /** Obtiene definición de plantilla para reconstruir formulario */
@@ -339,4 +369,121 @@ export function obtenerDefinicion(db: Database.Database, plantillaId: string): D
   } catch {
     return null;
   }
+}
+
+/** Compara dos definiciones (misma estructura = misma plantilla). */
+function definicionEquals(a: DefinicionPlantilla | null, b: DefinicionPlantilla | null): boolean {
+  if (!a || !b) return a === b;
+  if (a.nombreHoja !== b.nombreHoja) return false;
+  const va = a.variables || [];
+  const vb = b.variables || [];
+  if (va.length !== vb.length) return false;
+  const sortV = (v: VariableDef[]) => [...v].sort((x, y) => ((x.orden ?? 0) - (y.orden ?? 0)) || ((x.id || '').localeCompare(y.id || '')));
+  const sa = sortV(va);
+  const sb = sortV(vb);
+  for (let i = 0; i < sa.length; i++) {
+    const x = sa[i];
+    const y = sb[i];
+    if (x.id !== y.id || x.tipo !== y.tipo || (x.etiqueta || '') !== (y.etiqueta || '')) return false;
+    const ox = (x.opciones || []).slice().sort().join('|');
+    const oy = (y.opciones || []).slice().sort().join('|');
+    if (ox !== oy) return false;
+  }
+  return true;
+}
+
+/** Parsea archivo y devuelve solo la definición (sin insertar). Para comparar si ya está importada. */
+function parsearDefinicionDesdeArchivo(filePath: string, tipo: TipoPlantilla, nombre: string): DefinicionPlantilla {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.json') {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    let definicion: DefinicionPlantilla;
+    if (data?.variables && Array.isArray(data.variables) && typeof data.nombreHoja === 'string') {
+      definicion = data as unknown as DefinicionPlantilla;
+    } else if (data?.definicion && typeof data.definicion === 'object' && Array.isArray((data.definicion as Record<string, unknown>).variables)) {
+      definicion = (data.definicion as Record<string, unknown>) as unknown as DefinicionPlantilla;
+    } else {
+      throw new Error('El JSON debe contener "nombreHoja" y "variables".');
+    }
+    const rawVars = (definicion.variables || []) as unknown as Record<string, unknown>[];
+    const variables: VariableDef[] = rawVars.map((v, i) => {
+      const id = (v.id ?? v.codigo ?? `var_${i}`).toString().trim();
+      const etiqueta = (v.etiqueta ?? v.label ?? v.id ?? id).toString().trim();
+      const tipoStr = (v.tipo ?? v.type ?? 'text').toString().trim();
+      const opciones = Array.isArray(v.opciones) ? v.opciones.map(String) : undefined;
+      let tipoVar = normalizarTipo(tipoStr);
+      if (tipoVar === 'text' && opciones?.length) tipoVar = 'combobox';
+      return {
+        id: id || `var_${i}`,
+        codigo: id || undefined,
+        etiqueta: etiqueta || id,
+        tipo: tipoVar,
+        opciones,
+        seccion: v.seccion ? String(v.seccion).trim() : undefined,
+        orden: typeof v.orden === 'number' ? v.orden : i,
+        esResultadoEvaluacion: tipo === 'pesquisaje' && (v.esResultadoEvaluacion === true || String(v.etiqueta ?? v.label ?? '').toLowerCase().includes('resultado')),
+      };
+    });
+    return {
+      nombreHoja: definicion.nombreHoja || nombre,
+      variables: variables.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+      secciones: definicion.secciones,
+    };
+  }
+  if (ext === '.xlsx' || ext === '.xls') {
+    const workbook = XLSX.readFile(filePath);
+    const sheetNames = workbook.SheetNames || [];
+    const norm = (s: string) => String(s || '').trim().toLowerCase().normalize('NFD').replace(/\u0300/g, '');
+    const sheetCumple = (name: string) => {
+      const n = norm(name);
+      const tienePesquisaje = n.includes('pesquisaje');
+      const tieneEvalInicial = (n.includes('evaluacion') || n.includes('evaluación')) && n.includes('inicial');
+      return tipo === 'pesquisaje' ? tienePesquisaje : tieneEvalInicial;
+    };
+    const sheetName = sheetNames.find(sheetCumple) || sheetNames.find(n => norm(n).includes('variable')) || sheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) throw new Error('La pestaña de variables no existe en el Excel.');
+    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
+    if (!data || data.length < 2) throw new Error('La pestaña debe tener encabezado y al menos una fila.');
+    const headers = (data[0] || []).map(h => (h ?? '').toString());
+    const colIndex = (name: string) => headers.findIndex(h => h.toLowerCase().includes(name));
+    const idxCodigo = colIndex('codigo') >= 0 ? colIndex('codigo') : colIndex('id') >= 0 ? colIndex('id') : 0;
+    const idxEtiqueta = colIndex('etiqueta') >= 0 ? colIndex('etiqueta') : colIndex('label') >= 0 ? colIndex('label') : 1;
+    const idxTipo = colIndex('tipo') >= 0 ? colIndex('tipo') : colIndex('type') >= 0 ? colIndex('type') : 2;
+    const idxOpciones = colIndex('opcion');
+    const idxSeccion = colIndex('seccion');
+    const idxOrden = colIndex('orden');
+    const idxResultado = colIndex('resultado');
+    const variables: VariableDef[] = [];
+    for (let i = 1; i < data.length; i++) {
+      const vals = data[i] || [];
+      const codigo = (vals[idxCodigo] ?? '').toString().trim();
+      const etiqueta = (vals[idxEtiqueta] ?? '').toString().trim();
+      if (!etiqueta && !codigo) continue;
+      let tipoStr = (vals[idxTipo] ?? 'text').toString().trim();
+      const opcionesStr = idxOpciones >= 0 ? (vals[idxOpciones] ?? '').toString().trim() : '';
+      const opciones = opcionesStr ? opcionesStr.split(/[,;|]/).map(s => s.trim()).filter(Boolean) : undefined;
+      if (!tipoStr && opciones?.length) tipoStr = 'ComboBox';
+      let tipoVar = normalizarTipo(tipoStr);
+      if (tipoVar === 'text' && opciones?.length) tipoVar = 'combobox';
+      const esResultado = idxResultado >= 0 && (vals[idxResultado] ?? '').toString().toLowerCase().includes('si');
+      variables.push({
+        id: codigo || `var_${i}`,
+        codigo: codigo || undefined,
+        etiqueta: etiqueta || codigo,
+        tipo: tipoVar,
+        opciones,
+        seccion: idxSeccion >= 0 ? (vals[idxSeccion] ?? '').toString().trim() || undefined : undefined,
+        orden: idxOrden >= 0 ? parseInt(String(vals[idxOrden]), 10) || i : i,
+        esResultadoEvaluacion: tipo === 'pesquisaje' && (esResultado || etiqueta.toLowerCase().includes('resultado')),
+      });
+    }
+    if (variables.length === 0) throw new Error('No se encontraron variables válidas en la plantilla.');
+    return {
+      nombreHoja: nombre,
+      variables: variables.sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0)),
+    };
+  }
+  throw new Error('Formato no soportado. Use .json o .xlsx/.xls.');
 }

@@ -6,7 +6,7 @@
 import Database from 'better-sqlite3';
 import { app } from 'electron';
 import * as path from 'path';
-import { SCHEMA_SQL, SUJETOS_ADD_COLUMNS, SUJETOS_ADD_INDEXES, PLANTILLAS_ADD_TIPO } from './schema';
+import { SCHEMA_SQL, SUJETOS_ADD_COLUMNS, SUJETOS_ADD_INDEXES, PLANTILLAS_ADD_TIPO, PLANTILLAS_ADD_ACTIVA } from './schema';
 
 let db: Database.Database | null = null;
 
@@ -32,6 +32,13 @@ function runMigrations(database: Database.Database): void {
     }
   }
   for (const sql of PLANTILLAS_ADD_TIPO) {
+    try {
+      database.exec(sql);
+    } catch {
+      // Columna ya existe
+    }
+  }
+  for (const sql of PLANTILLAS_ADD_ACTIVA) {
     try {
       database.exec(sql);
     } catch {
