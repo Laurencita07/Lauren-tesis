@@ -1,6 +1,6 @@
 /**
  * Interfaz de identificación: solo la foto (tal cual, grande), sin recuadro.
- * Superpuesto en la zona blanca: Módulo de Carga Masiva..., Nombre del usuario, cuadro de texto, botón Entrar.
+ * Superpuesto en la zona blanca: título, Nombre del usuario, cuadro de texto, botón Entrar.
  * La imagen está en el proyecto: public/login-panel.png
  */
 
@@ -68,7 +68,7 @@ export function IdentificarInvestigador({ onIdentificar }: IdentificarInvestigad
             className="id-inv-photo-img"
           />
           <div className="id-inv-photo-overlay">
-            <p className="id-inv-photo-line1">Módulo de Carga Masiva de Sujetos Offline</p>
+            <p className="id-inv-photo-line1">Aplicacion Offline XAVIA SIDEC</p>
             <p className="id-inv-photo-line2">Nombre del usuario</p>
             <form onSubmit={handleSubmit} className="id-inv-photo-form">
               <input

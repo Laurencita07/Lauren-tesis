@@ -3,6 +3,7 @@
  * 3.1, 3.2, 6.1
  */
 
+// --- Imports: hooks de React, contexto del estudio, formulario CRD, modal de confirmación y toast ---
 import { useState, useEffect, useRef } from 'react';
 import { useEstudio } from '../context/EstudioContext';
 import { FormularioCRD } from '../components/crd/FormularioCRD';
@@ -10,6 +11,7 @@ import { ConfirmModal } from '../components/ConfirmModal';
 import { ToastMessage } from '../components/ToastMessage';
 import type { DefinicionFormulario } from '../components/crd/FormularioCRD';
 
+// Icono de "más" (adicionar): se usa en el botón "Adicionar sujeto"
 function IconMas() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -17,6 +19,7 @@ function IconMas() {
     </svg>
   );
 }
+// Icono de documento: se usa en "Visualizar hoja CRD"
 function IconDocument() {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
@@ -24,6 +27,7 @@ function IconDocument() {
     </svg>
   );
 }
+// Icono de lápiz: se usa en "Editar sujeto"
 function IconLapiz() {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
@@ -31,6 +35,7 @@ function IconLapiz() {
     </svg>
   );
 }
+// Icono de formulario: se usa en "Gestionar CRD"
 function IconForm() {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
@@ -38,6 +43,7 @@ function IconForm() {
     </svg>
   );
 }
+// Icono de papelera: se usa en "Eliminar"
 function IconTrash() {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden>
@@ -45,6 +51,7 @@ function IconTrash() {
     </svg>
   );
 }
+// Icono de calendario: se usa en el campo fecha de inclusión al editar
 function IconCalendar() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden>
@@ -52,6 +59,7 @@ function IconCalendar() {
     </svg>
   );
 }
+// Icono de flecha hacia abajo: se usa en los desplegables del formulario de edición
 function IconArrowDown() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden>
@@ -60,6 +68,7 @@ function IconArrowDown() {
   );
 }
 
+// Tipo de un sujeto pendiente de pesquisaje (no incluido aún)
 interface Pendiente {
   id: string;
   identificador_logico: string;
@@ -68,11 +77,15 @@ interface Pendiente {
   created_at: string;
 }
 
+// Cantidad de filas por página en la tabla
 const PAGE_SIZE = 10;
+// Opciones del desplegable "Grupo de sujetos" al editar
 const OPCIONES_GRUPO = ['Seleccione', 'Grupo 1', 'Grupo 2', 'Control', 'Experimental'];
+// Valores para hora (00–23) y minutos/segundos (00–59) en el selector de hora de inclusión
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MIN_SEG = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
+// Convierte el estado interno (pendiente/incluido/no_incluido) en texto para mostrar en la tabla
 function etiquetaEstado(estado: string): string {
   if (!estado) return '—';
   const e = estado.toLowerCase();
@@ -82,14 +95,23 @@ function etiquetaEstado(estado: string): string {
 }
 
 export function GestionarPesquisaje() {
+  // Datos del estudio activo (id, nombre y si está cargando)
   const { estudioId, nombreEstudio, loading: estudioLoading } = useEstudio();
+  // Lista de sujetos pendientes de pesquisaje que se muestra en la tabla
   const [lista, setLista] = useState<Pendiente[]>([]);
+  // true mientras se está cargando la lista desde el backend
   const [loading, setLoading] = useState(true);
+  // Página actual de la paginación (1-based)
   const [pagina, setPagina] = useState(1);
+  // true cuando está abierto el modal de "Adicionar sujeto" (solo iniciales)
   const [modalIncluir, setModalIncluir] = useState(false);
+  // Iniciales que el usuario escribe en el modal de adicionar
   const [iniciales, setIniciales] = useState('');
+  // Texto del mensaje toast (éxito o error)
   const [mensaje, setMensaje] = useState('');
+  // Tipo del mensaje: 'ok' (verde) o 'error' (rojo)
   const [mensajeTipo, setMensajeTipo] = useState<'ok' | 'error' | null>(null);
+  // Cuando no es null, se muestra el modal con la hoja CRD (visualizar o gestionar) de un sujeto
   const [hojaAbierta, setHojaAbierta] = useState<{
     sujetoId: string;
     sujetoIdentificador: string;
@@ -99,11 +121,17 @@ export function GestionarPesquisaje() {
     datos: Record<string, unknown>;
     soloLectura?: boolean;
   } | null>(null);
+  // Plantillas de tipo Pesquisaje importadas; se usa la primera para abrir hojas CRD
   const [plantillasPesquisaje, setPlantillasPesquisaje] = useState<{ id: string; nombre: string }[]>([]);
+  // Sujeto seleccionado para anular; si no es null se muestra el modal de confirmación
   const [pendienteToAnular, setPendienteToAnular] = useState<Pendiente | null>(null);
+  // Texto del filtro "Identificador" en criterios de búsqueda
   const [identificador, setIdentificador] = useState('');
+  // id del sujeto que se está editando en el modal "Editar sujeto"
   const [sujetoEditandoId, setSujetoEditandoId] = useState<string | null>(null);
+  // true cuando está abierto el modal de editar sujeto (inclusión, grupo, etc.)
   const [modalEditar, setModalEditar] = useState(false);
+  // Valores del formulario de edición de sujeto (iniciales, fecha, número inclusión, grupo, hora, etc.)
   const [formEdit, setFormEdit] = useState({
     iniciales: '',
     fechaInclusion: new Date().toISOString().slice(0, 10),
@@ -115,8 +143,10 @@ export function GestionarPesquisaje() {
     horaS: '00',
     inicialesCentro: 'CIM',
   });
+  // Referencia al input de fecha para poder abrir el selector nativo desde el botón del calendario
   const refFechaEdit = useRef<HTMLInputElement>(null);
 
+  // Obtiene del backend la lista de sujetos pendientes de pesquisaje (opcionalmente filtrada por identificador) y actualiza estado
   const cargarLista = () => {
     if (!estudioId) return;
     setLoading(true);
@@ -130,6 +160,7 @@ export function GestionarPesquisaje() {
       .finally(() => setLoading(false));
   };
 
+  // Carga las plantillas de tipo Pesquisaje del estudio para poder abrir hojas CRD
   const cargarPlantillas = () => {
     if (!estudioId) return;
     window.electronAPI?.template?.listar?.(estudioId, 'pesquisaje')
@@ -137,6 +168,7 @@ export function GestionarPesquisaje() {
       .catch(() => setPlantillasPesquisaje([]));
   };
 
+  // Al montar o cambiar estudioId: cargar lista de pendientes y plantillas de pesquisaje
   useEffect(() => {
     if (estudioId) {
       cargarLista();
@@ -144,6 +176,7 @@ export function GestionarPesquisaje() {
     }
   }, [estudioId]);
 
+  // Ejecuta la búsqueda con el identificador escrito y actualiza la lista
   const handleBuscarPesquisaje = () => {
     if (!estudioId) return;
     setLoading(true);
@@ -157,6 +190,7 @@ export function GestionarPesquisaje() {
       .finally(() => setLoading(false));
   };
 
+  // Limpia el filtro de identificador y recarga la lista completa de pendientes
   const handleCancelarBuscar = () => {
     setIdentificador('');
     if (estudioId) {
@@ -171,6 +205,7 @@ export function GestionarPesquisaje() {
     }
   };
 
+  // Crea un nuevo sujeto para pesquisaje con las iniciales del modal y recarga la lista; muestra mensaje de éxito o error
   const handleIncluirSiguiente = () => {
     const ini = (iniciales || '').trim();
     if (!ini) {
@@ -193,6 +228,7 @@ export function GestionarPesquisaje() {
       });
   };
 
+  // Abre el modal para visualizar (solo lectura) la hoja CRD de pesquisaje del sujeto
   const abrirVisualizarHojaCRD = (sujeto: Pendiente) => {
     const plantilla = plantillasPesquisaje[0];
     if (!plantilla) {
@@ -215,6 +251,7 @@ export function GestionarPesquisaje() {
     });
   };
 
+  // Abre el modal para gestionar (editar) la hoja CRD de pesquisaje del sujeto y guardar resultado Incluido/No Incluido
   const abrirGestionarCRD = (sujeto: Pendiente) => {
     const plantilla = plantillasPesquisaje[0];
     if (!plantilla) {
@@ -236,6 +273,7 @@ export function GestionarPesquisaje() {
     });
   };
 
+  // Carga los datos del sujeto desde el backend y abre el modal de edición (inclusión, grupo, hora, etc.)
   const abrirEditarSujeto = (sujeto: Pendiente) => {
     window.electronAPI?.subject?.obtenerPorId?.(sujeto.id).then((row: Record<string, unknown> | undefined) => {
       if (!row) return;
@@ -257,6 +295,7 @@ export function GestionarPesquisaje() {
     });
   };
 
+  // Valida el formulario de edición, comprueba identificador único y actualiza el sujeto en el backend; cierra modal y recarga lista
   const handleGuardarEdicion = () => {
     const { iniciales, fechaInclusion, numeroInclusion, grupoSujeto } = formEdit;
     if (!(iniciales || '').trim()) { setMensaje('Iniciales obligatorias.'); setMensajeTipo('error'); return; }
@@ -284,6 +323,7 @@ export function GestionarPesquisaje() {
       });
   };
 
+  // Guarda los datos de la hoja CRD en el backend; si hay campo "Resultado de Evaluación" (Incluido/No Incluido) actualiza el sujeto; cierra modal y recarga lista
   const guardarHojaPesquisaje = (datos: Record<string, unknown>) => {
     if (!hojaAbierta) return;
     window.electronAPI?.crd?.guardarDatosHoja?.(hojaAbierta.hojaId, datos);
@@ -302,10 +342,12 @@ export function GestionarPesquisaje() {
     cargarLista();
   };
 
+  // Marca el sujeto como "a anular" para mostrar el modal de confirmación
   const handleEliminarSujeto = (sujeto: Pendiente) => {
     setPendienteToAnular(sujeto);
   };
 
+  // Tras confirmar en el modal: anula el sujeto en el backend, muestra mensaje y recarga la lista
   const confirmarAnularPendiente = () => {
     if (!pendienteToAnular) return;
     window.electronAPI?.subject?.anular?.(pendienteToAnular.id, 'Anulado desde Gestionar Pesquisaje');
@@ -315,23 +357,28 @@ export function GestionarPesquisaje() {
     cargarLista();
   };
 
+  // Cálculos de paginación: total de páginas, filas de la página actual, rango "desde-hasta" para mostrar
   const totalPaginas = Math.max(1, Math.ceil(lista.length / PAGE_SIZE));
   const listaPagina = lista.slice((pagina - 1) * PAGE_SIZE, pagina * PAGE_SIZE);
   const desde = lista.length === 0 ? 0 : (pagina - 1) * PAGE_SIZE + 1;
   const hasta = Math.min(pagina * PAGE_SIZE, lista.length);
 
+  // Valor del input de "ir a página"; se sincroniza con la página actual
   const [paginaInput, setPaginaInput] = useState(String(pagina));
   useEffect(() => { setPaginaInput(String(pagina)); }, [pagina]);
+  // Aplica el número escrito en el input de página (al salir del campo o Enter)
   const aplicarPaginaInput = () => {
     const n = parseInt(paginaInput, 10);
     if (!Number.isNaN(n)) setPagina(Math.max(1, Math.min(totalPaginas, n)));
     else setPaginaInput(String(pagina));
   };
 
+  // Mientras se carga el estudio no se muestra el contenido
   if (estudioLoading) return <p>Cargando estudio...</p>;
 
   return (
     <div className="gestionar-sujetos">
+      {/* Toast de mensaje (éxito o error) que se cierra solo o al hacer clic */}
       {mensaje && (
         <ToastMessage
           tipo={mensajeTipo === 'error' ? 'error' : 'ok'}
@@ -340,6 +387,7 @@ export function GestionarPesquisaje() {
           duracion={5}
         />
       )}
+      {/* Modal de confirmación para anular (eliminar) un sujeto de pesquisaje */}
       {pendienteToAnular && (
         <ConfirmModal
           title="XAVIA SIDEC"
@@ -350,6 +398,7 @@ export function GestionarPesquisaje() {
           onCancel={() => setPendienteToAnular(null)}
         />
       )}
+      {/* Sección de búsqueda: filtro por identificador */}
       <section className="gs-seccion gs-buscar">
         <h2 className="gs-titulo-seccion">Buscar sujeto</h2>
         <div className="gs-panel gs-criterios">
@@ -371,6 +420,7 @@ export function GestionarPesquisaje() {
         </div>
       </section>
 
+      {/* Sección del listado: tabla de sujetos pendientes y paginación */}
       <section className="gs-seccion gs-listado">
         <div className="gs-panel gs-tabla-panel">
           <div className="gs-panel-header gs-listado-header">
@@ -420,6 +470,7 @@ export function GestionarPesquisaje() {
               </tbody>
             </table>
           </div>
+          {/* Controles de paginación: primera, anterior, input de página, siguiente, última */}
           <div className="gs-paginacion">
             <div className="gs-paginacion-controles">
               <button type="button" className="gs-pag-btn" disabled={pagina <= 1} onClick={() => setPagina(1)} aria-label="Primera">&laquo;</button>
@@ -441,6 +492,7 @@ export function GestionarPesquisaje() {
         </div>
       </section>
 
+      {/* Modal para adicionar un nuevo sujeto: solo pide iniciales y llama a crearParaPesquisaje */}
       {modalIncluir && (
         <div className="modal-overlay" onClick={() => setModalIncluir(false)}>
           <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -460,7 +512,7 @@ export function GestionarPesquisaje() {
             
             <div className="gs-botones" style={{ marginTop: 12 }}>
               <button type="button" className="btn-primary" onClick={handleIncluirSiguiente}>
-                Incluir sujeto → siguiente
+                Adicionar sujeto → siguiente
               </button>
               <button type="button" className="btn-secondary" onClick={() => { setModalIncluir(false); setIniciales(''); setMensaje(''); cargarLista(); }}>
                 Cerrar
@@ -470,6 +522,7 @@ export function GestionarPesquisaje() {
         </div>
       )}
 
+      {/* Modal de hoja CRD (visualizar o gestionar): muestra el formulario dinámico según la plantilla de Pesquisaje */}
       {hojaAbierta && (
         <div className="modal-overlay" onClick={() => setHojaAbierta(null)}>
           <div className="modal-content modal-content--wide" onClick={e => e.stopPropagation()}>
@@ -488,6 +541,7 @@ export function GestionarPesquisaje() {
         </div>
       )}
 
+      {/* Modal de editar sujeto: iniciales, fecha/número de inclusión, grupo, estado, hora, iniciales centro */}
       {modalEditar && (
         <div className="modal-overlay" onClick={() => { setModalEditar(false); setSujetoEditandoId(null); }}>
           <div className="modal-content modal-content--crear-sujeto" onClick={e => e.stopPropagation()}>
@@ -497,6 +551,7 @@ export function GestionarPesquisaje() {
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 12 }}>
                 Si modifica las iniciales o el número de inclusión, el identificador del sujeto se actualizará automáticamente.
               </p>
+              {/* Grid de campos del formulario de edición */}
               <div className="crear-sujeto__grid">
                 <div className="crear-sujeto__field">
                   <label className="crear-sujeto__label">Iniciales del sujeto:<span className="req">*</span></label>
@@ -584,6 +639,7 @@ export function GestionarPesquisaje() {
                   </div>
                 </div>
               </div>
+              {/* Botones del modal de edición */}
               <div className="crear-sujeto__actions">
                 <button type="button" className="btn-primary" onClick={handleGuardarEdicion}>Guardar cambios</button>
                 <button type="button" className="btn-secondary" onClick={() => { setModalEditar(false); setSujetoEditandoId(null); }}>Cancelar</button>
@@ -593,6 +649,7 @@ export function GestionarPesquisaje() {
         </div>
       )}
 
+      {/* Estilos locales del modal (overlay, contenido, variante ancha y variante crear-sujeto) */}
       <style>{`
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background: white; padding: 24px; border-radius: 8px; max-width: 480px; width: 90%; }

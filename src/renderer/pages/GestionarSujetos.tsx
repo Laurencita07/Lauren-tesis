@@ -98,7 +98,6 @@ export function GestionarSujetos() {
   const [lista, setLista] = useState<SujetoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pagina, setPagina] = useState(1);
-  const [modalOpcion, setModalOpcion] = useState(false);
   const [modalDirecta, setModalDirecta] = useState(false);
   const [modalPesquisaje, setModalPesquisaje] = useState(false);
   const [inicialesPesquisaje, setInicialesPesquisaje] = useState('');
@@ -166,7 +165,9 @@ export function GestionarSujetos() {
   const refFechaInclusion = useRef<HTMLInputElement>(null);
 
   const abrirOpcionAdicionar = () => {
-    setModalOpcion(true);
+    setModalPesquisaje(false);
+    setSujetoEditandoId(null);
+    setModalDirecta(true);
     setMensaje('');
     setMensajeTipo(null);
     setMensajePesquisaje('');
@@ -447,7 +448,7 @@ export function GestionarSujetos() {
           <div className="gs-panel-header gs-listado-header">
             <span>Listado de sujetos</span>
             <button type="button" className="gs-btn-adicionar" onClick={abrirOpcionAdicionar}>
-              <IconMas /> Adicionar sujeto
+              <IconMas /> Incluir sujeto
             </button>
           </div>
           <div className="gs-tabla-wrap">
@@ -536,34 +537,6 @@ export function GestionarSujetos() {
           </div>
         </div>
       </section>
-
-      {modalOpcion && (
-        <div className="modal-overlay" onClick={() => setModalOpcion(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
-            <h3 className="crear-sujeto__titulo" style={{ marginBottom: 16 }}>Adicionar sujeto</h3>
-            <p style={{ color: 'var(--text-secondary)', marginBottom: 20 }}>Elija cómo desea agregar al sujeto:</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => { setModalOpcion(false); setModalDirecta(true); }}
-              >
-                Inclusión directa
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => { setModalOpcion(false); setModalPesquisaje(true); }}
-              >
-                Con pesquisaje
-              </button>
-            </div>
-            <button type="button" className="btn-secondary" style={{ marginTop: 16 }} onClick={() => setModalOpcion(false)}>
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
 
       {modalPesquisaje && (
         <div className="modal-overlay" onClick={() => { setModalPesquisaje(false); setInicialesPesquisaje(''); setMensajePesquisaje(''); }}>
